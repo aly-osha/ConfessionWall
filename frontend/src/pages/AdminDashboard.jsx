@@ -59,6 +59,16 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleUserRoleChange = async (userId, newRole) => {
+        try {
+            await api.put(`/admin/users/${userId}/role`, { role: newRole });
+            // Update local state
+            setUsers(users.map(u => u._id === userId ? { ...u, role: newRole } : u));
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to update user role');
+        }
+    };
+
     return (
         <div className="container" style={{ marginTop: '40px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
@@ -67,7 +77,7 @@ const AdminDashboard = () => {
                         <ArrowLeft size={16} /> Exit
                     </button>
                     <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger-color)' }}>
-                        <ShieldAlert size={24} /> Security Dashboard
+                        <ShieldAlert size={24} /> {user?.role === 'moderator' ? 'Moderator Dashboard' : 'Security Dashboard'}
                     </h2>
                 </div>
                 <button onClick={fetchData} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -158,7 +168,23 @@ const AdminDashboard = () => {
                             {users.map(u => (
                                 <tr key={u._id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                     <td style={{ padding: '15px' }}><Link to={`/profile/${u.username}`}>{u.username}</Link></td>
-                                    <td style={{ padding: '15px' }}>{u.role}</td>
+                                    <td style={{ padding: '15px' }}>
+                                        {user.role === 'admin' && u.role !== 'admin' ? (
+                                            <select
+                                                value={u.role}
+                                                onChange={(e) => handleUserRoleChange(u._id, e.target.value)}
+                                                style={{
+                                                    backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)',
+                                                    border: '1px solid var(--border-color)', padding: '5px', borderRadius: '4px'
+                                                }}
+                                            >
+                                                <option value="user">User</option>
+                                                <option value="moderator">Moderator</option>
+                                            </select>
+                                        ) : (
+                                            u.role
+                                        )}
+                                    </td>
                                     <td style={{ padding: '15px', color: u.warningCount > 0 ? 'var(--danger-color)' : 'inherit' }}>{u.warningCount}</td>
                                     <td style={{ padding: '15px' }}>
                                         <span style={{

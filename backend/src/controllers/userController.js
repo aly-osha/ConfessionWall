@@ -18,6 +18,10 @@ const registerUser = async (req, res, next) => {
         const userExists = await User.findOne({ email });
 
         if (userExists) {
+            if (userExists.status === 'perm_banned' || userExists.status === 'temp_banned') {
+                res.status(403);
+                throw new Error('This email is banned from creating an account');
+            }
             res.status(400);
             throw new Error('User already exists');
         }

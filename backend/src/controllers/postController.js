@@ -157,7 +157,8 @@ const upvotePost = async (req, res, next) => {
         }
 
         await post.save();
-        res.json(post);
+        const populatedPost = await Post.findById(post._id).populate('author', 'username avatarUrl');
+        res.json(populatedPost);
     } catch (error) {
         next(error);
     }
@@ -187,7 +188,8 @@ const downvotePost = async (req, res, next) => {
         }
 
         await post.save();
-        res.json(post);
+        const populatedPost = await Post.findById(post._id).populate('author', 'username avatarUrl');
+        res.json(populatedPost);
     } catch (error) {
         next(error);
     }

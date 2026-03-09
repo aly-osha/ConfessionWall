@@ -38,7 +38,7 @@ const createReport = async (req, res, next) => {
         try {
             await Report.create({
                 reporter: req.user.id,
-                type,
+                type: type.charAt(0).toUpperCase() + type.slice(1),
                 targetId,
                 reason,
             });
@@ -111,7 +111,7 @@ const reviewReport = async (req, res, next) => {
             report.status = 'dismissed';
             await report.save();
             // Restore post visibility if it was hidden
-            let targetDoc = report.type === 'post' ? await Post.findById(report.targetId) : await Comment.findById(report.targetId);
+            let targetDoc = report.type.toLowerCase() === 'post' ? await Post.findById(report.targetId) : await Comment.findById(report.targetId);
             if (targetDoc && targetDoc.reportCount >= REPORT_THRESHOLD) {
                 targetDoc.isHidden = false;
                 targetDoc.reportCount = 0; // Reset count
@@ -125,7 +125,7 @@ const reviewReport = async (req, res, next) => {
         await report.save();
 
         let targetDoc;
-        if (report.type === 'post') {
+        if (report.type.toLowerCase() === 'post') {
             targetDoc = await Post.findById(report.targetId);
         } else {
             targetDoc = await Comment.findById(report.targetId);

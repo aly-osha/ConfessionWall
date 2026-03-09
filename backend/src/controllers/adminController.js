@@ -5,7 +5,14 @@ const User = require('../models/User');
 // @access  Private/Admin
 const getUsers = async (req, res, next) => {
     try {
-        const users = await User.find({}).select('-password -email');
+        let query = {};
+
+        // If the requester is a moderator, restrict to only users (not other admins/mods)
+        if (req.user && req.user.role === 'moderator') {
+            query.role = 'user';
+        }
+
+        const users = await User.find(query).select('-password -email');
         res.json(users);
     } catch (error) {
         next(error);
@@ -50,7 +57,52 @@ const updateUserStatus = async (req, res, next) => {
     }
 };
 
+// @desc    Update user role
+// @route   PUT /api/admin/users/:id/role
+// @access  Private/Admin
+const updateUserRole = async (req, res, next) => {
+    try {
+        const { role } = req.body;
+
+        // Validate role
+        if (!['user', 'moderator'].includes(role)) {
+            res.status(400);
+            throw new Error('Invalid role');
+        }
+
+        const user = await User.findById(req.params.id);
+
+        if (user) {
+            // Prevent changing an admin's role
+            if (user.role === 'admin') {
+                res.status(400);
+                throw new Error('You cannot change an admin\'s role');
+            }
+
+            // Prevent admin from changing their own role (even though the above check catches it, this is for clarity)
+            if (user.id === req.user.id) {
+                res.status(400);
+                throw new Error('You cannot change your own role');
+            }
+
+            user.role = role;
+            const updatedUser = await user.save();
+            res.json({
+                _id: updatedUser._id,
+                username: updatedUser.username,
+                role: updatedUser.role
+            });
+        } else {
+            res.status(404);
+            throw new Error('User not found');
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getUsers,
-    updateUserStatus
+    updateUserStatus,
+    updateUserRole
 }

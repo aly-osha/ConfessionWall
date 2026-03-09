@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
-import { LogOut, User as UserIcon, ShieldAlert } from 'lucide-react';
+import { LogOut, User as UserIcon, ShieldAlert, Flag } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -12,6 +12,8 @@ const Feed = () => {
     const [newPost, setNewPost] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [reportingItem, setReportingItem] = useState(null);
+    const [reportReason, setReportReason] = useState('');
 
     useEffect(() => {
         fetchPosts();
@@ -57,6 +59,24 @@ const Feed = () => {
         navigate('/login');
     };
 
+    const handleReport = async (e) => {
+        e.preventDefault();
+        if (!reportReason.trim() || !reportingItem) return;
+
+        try {
+            await api.post('/reports', {
+                type: reportingItem.type,
+                targetId: reportingItem.id,
+                reason: reportReason
+            });
+            alert('Report submitted successfully. Thank you.');
+            setReportingItem(null);
+            setReportReason('');
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to submit report');
+        }
+    };
+
     if (!user) {
         navigate('/login');
         return null;
@@ -68,9 +88,9 @@ const Feed = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
                 <h2>Confession Wall</h2>
                 <div style={{ display: 'flex', gap: '15px' }}>
-                    {user.role === 'admin' && (
+                    {(user.role === 'admin' || user.role === 'moderator') && (
                         <Link to="/admin" className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <ShieldAlert size={16} /> Admin
+                            <ShieldAlert size={16} /> Dashboard
                         </Link>
                     )}
                     <Link to={`/profile/${user.username}`} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -136,11 +156,44 @@ const Feed = () => {
                                 <Link to={`/post/${post._id}`} style={{ color: 'inherit' }}>
                                     💬 {post.commentCount} Comments
                                 </Link>
+                                <button
+                                    onClick={() => setReportingItem({ id: post._id, type: 'post' })}
+                                    style={{ background: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '5px', padding: 0 }}
+                                >
+                                    <Flag size={14} /> Report
+                                </button>
                             </div>
                         </div>
                     ))
                 )}
             </div>
+
+            {/* Reporting Modal */}
+            {reportingItem && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+                }}>
+                    <div className="card" style={{ width: '400px' }}>
+                        <h3 style={{ marginBottom: '15px' }}>Report Content</h3>
+                        <form onSubmit={handleReport}>
+                            <textarea
+                                placeholder="Why are you reporting this? (e.g., Harassment, Spam)"
+                                value={reportReason}
+                                onChange={(e) => setReportReason(e.target.value)}
+                                rows={4}
+                                required
+                                style={{ marginBottom: '15px' }}
+                            />
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                <button type="button" className="btn-secondary" onClick={() => setReportingItem(null)}>Cancel</button>
+                                <button type="submit" className="btn-danger" style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}>Submit Report</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };
