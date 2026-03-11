@@ -132,6 +132,48 @@ const deletePost = async (req, res, next) => {
     }
 };
 
+// @desc    Update a post
+// @route   PUT /api/posts/:id
+// @access  Private
+const updatePost = async (req, res, next) => {
+    try {
+        const post = await Post.findById(req.params.id);
+
+        if (!post) {
+            res.status(404);
+            throw new Error('Post not found');
+        }
+
+        // Check if user is the author
+        if (post.author.toString() !== req.user.id) {
+            res.status(401);
+            throw new Error('User not authorized to edit this post');
+        }
+
+        const { content } = req.body;
+        if (!content) {
+            res.status(400);
+            throw new Error('Please add content');
+        }
+
+        // AI MODERATION CHECK
+        const moderationResult = await moderateContent(content);
+
+        if (moderationResult.isFlagged) {
+            res.status(400);
+            throw new Error(`Post update rejected: ${moderationResult.reason}`);
+        }
+
+        post.content = content;
+        await post.save();
+
+        const populatedPost = await Post.findById(post._id).populate('author', 'username avatarUrl');
+        res.json(populatedPost);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Upvote a post
 // @route   POST /api/posts/:id/upvote
 // @access  Private
@@ -298,6 +340,7 @@ module.exports = {
     getUserPosts,
     getPostById,
     createPost,
+    updatePost,
     deletePost,
     upvotePost,
     downvotePost,

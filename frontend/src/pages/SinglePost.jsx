@@ -18,6 +18,8 @@ const SinglePost = () => {
     const [error, setError] = useState(null);
     const [reportReason, setReportReason] = useState('');
     const [reportingItem, setReportingItem] = useState(null); // { id, type: 'post' | 'comment' }
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState('');
 
     useEffect(() => {
         fetchPostAndComments();
@@ -71,6 +73,17 @@ const SinglePost = () => {
         }
     };
 
+    const handleEditPost = async () => {
+        if (!editContent.trim()) return;
+        try {
+            const { data } = await api.put(`/posts/${id}`, { content: editContent });
+            setPost({ ...post, content: data.content });
+            setIsEditing(false);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to edit post');
+        }
+    };
+
     const handleDeleteComment = async (commentId) => {
         if (!window.confirm('Delete this comment?')) return;
         try {
@@ -112,13 +125,31 @@ const SinglePost = () => {
             {/* Main Post */}
             <div className="card" style={{ padding: '30px', position: 'relative' }}>
                 {(user._id === post.author._id || user.role === 'admin' || user.role === 'moderator') && (
-                    <button
-                        onClick={handleDeletePost}
-                        className="btn-danger"
-                        style={{ position: 'absolute', top: '20px', right: '20px', padding: '4px 8px', fontSize: '0.8rem' }}
-                    >
-                        Delete
-                    </button>
+                    <div style={{ position: 'absolute', top: '20px', right: '20px', display: 'flex', gap: '10px' }}>
+                        {user._id === post.author._id && (
+                            <button
+                                onClick={() => {
+                                    if (isEditing) {
+                                        setIsEditing(false);
+                                    } else {
+                                        setEditContent(post.content);
+                                        setIsEditing(true);
+                                    }
+                                }}
+                                className="btn-secondary"
+                                style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                            >
+                                {isEditing ? 'Cancel Edit' : 'Edit'}
+                            </button>
+                        )}
+                        <button
+                            onClick={handleDeletePost}
+                            className="btn-danger"
+                            style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                        >
+                            Delete
+                        </button>
+                    </div>
                 )}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
@@ -133,7 +164,20 @@ const SinglePost = () => {
                     </div>
                 </div>
 
-                <p style={{ fontSize: '1.2rem', marginBottom: '30px', whiteSpace: 'pre-wrap' }}>{post.content}</p>
+                {isEditing ? (
+                    <div style={{ marginBottom: '30px' }}>
+                        <textarea
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            rows="4"
+                            maxLength={1000}
+                            style={{ width: '100%', marginBottom: '10px', padding: '10px', resize: 'vertical' }}
+                        />
+                        <button onClick={handleEditPost} className="btn-primary" style={{ padding: '5px 15px' }}>Save Changes</button>
+                    </div>
+                ) : (
+                    <p style={{ fontSize: '1.2rem', marginBottom: '30px', whiteSpace: 'pre-wrap' }}>{post.content}</p>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
                     <div style={{ display: 'flex', gap: '20px' }}>

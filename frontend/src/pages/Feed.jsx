@@ -14,6 +14,8 @@ const Feed = () => {
     const [error, setError] = useState(null);
     const [reportingItem, setReportingItem] = useState(null);
     const [reportReason, setReportReason] = useState('');
+    const [editingPostId, setEditingPostId] = useState(null);
+    const [editContent, setEditContent] = useState('');
 
     useEffect(() => {
         fetchPosts();
@@ -41,6 +43,28 @@ const Feed = () => {
             setNewPost('');
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to post confession');
+        }
+    };
+
+    const handleDeletePost = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this confession?')) return;
+        try {
+            await api.delete(`/posts/${id}`);
+            setPosts(posts.filter(p => p._id !== id));
+        } catch (err) {
+            alert('Failed to delete post');
+        }
+    };
+
+    const handleEditPostSubmit = async (id) => {
+        if (!editContent.trim()) return;
+        try {
+            const { data } = await api.put(`/posts/${id}`, { content: editContent });
+            setPosts(posts.map(p => p._id === id ? { ...p, content: data.content } : p));
+            setEditingPostId(null);
+            setEditContent('');
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to edit post');
         }
     };
 
@@ -142,9 +166,49 @@ const Feed = () => {
                                         </div>
                                     </div>
                                 </div>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                    {(user._id === post.author._id) && (
+                                        <button 
+                                            onClick={() => {
+                                                if (editingPostId === post._id) {
+                                                    setEditingPostId(null);
+                                                } else {
+                                                    setEditContent(post.content);
+                                                    setEditingPostId(post._id);
+                                                }
+                                            }}
+                                            className="btn-secondary" 
+                                            style={{ padding: '2px 8px', fontSize: '0.8rem' }}
+                                        >
+                                            {editingPostId === post._id ? 'Cancel' : 'Edit'}
+                                        </button>
+                                    )}
+                                    {(user._id === post.author._id || user.role === 'admin' || user.role === 'moderator') && (
+                                        <button 
+                                            onClick={() => handleDeletePost(post._id)}
+                                            className="btn-danger" 
+                                            style={{ padding: '2px 8px', fontSize: '0.8rem' }}
+                                        >
+                                            Delete
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
-                            <p style={{ fontSize: '1.1rem', marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{post.content}</p>
+                            {editingPostId === post._id ? (
+                                <div style={{ marginBottom: '20px' }}>
+                                    <textarea
+                                        value={editContent}
+                                        onChange={(e) => setEditContent(e.target.value)}
+                                        rows="3"
+                                        maxLength={1000}
+                                        style={{ width: '100%', marginBottom: '10px', padding: '10px', resize: 'vertical' }}
+                                    />
+                                    <button onClick={() => handleEditPostSubmit(post._id)} className="btn-primary" style={{ padding: '5px 15px' }}>Save Changes</button>
+                                </div>
+                            ) : (
+                                <p style={{ fontSize: '1.1rem', marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{post.content}</p>
+                            )}
 
                             <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)' }}>
                                 <button onClick={() => handleVote(post._id, 'upvote')} style={{ background: 'none', color: post.upvotes.includes(user._id) ? 'var(--accent-color)' : 'inherit', padding: 0 }}>

@@ -5,6 +5,7 @@ const {
     getUserPosts,
     getPostById,
     createPost,
+    updatePost,
     deletePost,
     upvotePost,
     downvotePost,
@@ -21,6 +22,7 @@ router.get('/user/:username', getUserPosts);
 
 router.route('/:id')
     .get(getPostById)
+    .put(protect, updatePost)
     .delete(protect, deletePost);
 
 router.post('/:id/upvote', protect, upvotePost);
