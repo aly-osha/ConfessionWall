@@ -40,7 +40,7 @@ const Register = () => {
         <div className="container" style={{ maxWidth: '400px', marginTop: '100px' }}>
             <div className="card">
                 <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                    <UserPlus size={40} color="var(--accent-color)" />
+                    <div style={{ fontSize: '3rem', marginBottom: '10px' }}>💭</div>
                     <h2>Join the Wall</h2>
                     <p style={{ color: 'var(--text-secondary)' }}>Create an anonymous identity</p>
                 </div>

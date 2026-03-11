@@ -35,9 +35,9 @@ const Login = () => {
         <div className="container" style={{ maxWidth: '400px', marginTop: '100px' }}>
             <div className="card">
                 <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                    <LogIn size={40} color="var(--accent-color)" />
+                    <div style={{ fontSize: '3rem', marginBottom: '10px' }}>💭</div>
                     <h2>Welcome Back</h2>
-                    <p style={{ color: 'var(--text-secondary)' }}>Login to enter the void</p>
+                    <p style={{ color: 'var(--text-secondary)' }}>Login to confess</p>
                 </div>
 
                 <form onSubmit={onSubmit}>

@@ -86,7 +86,7 @@ const Feed = () => {
         <div className="container" style={{ marginTop: '40px' }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
-                <h2>Confession Wall</h2>
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>💭 Confession Wall</h2>
                 <div style={{ display: 'flex', gap: '15px' }}>
                     {(user.role === 'admin' || user.role === 'moderator') && (
                         <Link to="/admin" className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
