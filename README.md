@@ -25,8 +25,8 @@ This repository contains a full‑stack social platform where users can post ano
 - **AI moderation** screens posts/comments for offensive content
 - **Posting & commenting** with upvotes/downvotes and threads
 - **Auto-moderation**: posts hidden after 5 reports; users banned after 3 violations
-- **Admin dashboard** for user/report management
-- **JWT authentication** with secure token generation
+- **Admin & Moderator Dashboards**: secure role-based access for user and report management
+- **JWT authentication** with secure token generation and password management
 - Utilities like username generator and token helper
 
 ## 🚀 Setup Instructions
@@ -35,32 +35,27 @@ This repository contains a full‑stack social platform where users can post ano
 1. Create a free MongoDB Atlas cluster.
 2. Copy the connection URI and set credentials.
 
-### 2. Backend
-```bash
-cd backend
-npm install
-```
-Create a `.env` file with:
+### 2. Environment Setup (Backend)
+Create a `.env` file in the `backend` directory with at least the following:
 ```env
 PORT=5000
 MONGO_URI=your_mongodb_connection_string_here
 JWT_SECRET=super_secret_key_for_json_web_tokens
 NODE_ENV=development
 ```
-Start the server:
+
+### 3. Installation & Running Locally
+A root `package.json` is provided to install and run both frontend and backend concurrently.
+
 ```bash
+# 1. Install dependencies for root, backend, and frontend
+npm run install:all
+
+# 2. Start both servers concurrently
 npm run dev
-# or
-node server.js
 ```
 
-### 3. Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Access the app at `http://localhost:5173` (proxying API to `http://localhost:5000`).
+The frontend will be accessible at `http://localhost:5173` and the backend API at `http://localhost:5000`.
 
 ## 📦 Deployment Guide
 
