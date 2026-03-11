@@ -183,11 +183,34 @@ const getMe = async (req, res, next) => {
 }
 
 
+// @desc    Change user password
+// @route   PUT /api/users/password
+// @access  Private
+const changePassword = async (req, res, next) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        const user = await User.findById(req.user.id).select('+password');
+
+        if (user && (await user.matchPassword(currentPassword))) {
+            user.password = newPassword;
+            await user.save();
+            res.json({ message: 'Password updated successfully' });
+        } else {
+            res.status(401);
+            throw new Error('Invalid current password');
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     getUserProfile,
     followUser,
     unfollowUser,
-    getMe
+    getMe,
+    changePassword
 };

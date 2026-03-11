@@ -1,25 +1,28 @@
-/* Reset and Base Styles */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+
 :root {
-  /* Minimalist Dark Theme Tokens */
-  --bg-color: #0d1117; /* Very dark blue/grey, typical for dark themes */
-  --bg-surface: #161b22; /* Slightly lighter for cards/surfaces */
-  --bg-surface-hover: #21262d; 
+  /* Minimalist Bright & Elegant Theme Tokens (Fable-inspired) */
+  --bg-color: #f8f7f4; /* Creamy off-white */
+  --bg-surface: #ffffff; /* pure white for cards */
+  --bg-surface-hover: #f1f0ed; 
 
-  --text-primary: #c9d1d9;
-  --text-secondary: #8b949e;
-  --text-muted: #484f58;
+  --text-primary: #1a3622; /* Dark forest green */
+  --text-secondary: #4a5c50;
+  --text-muted: #7c8e82;
 
-  --accent-color: #58a6ff; /* A soft, modern blue */
-  --accent-hover: #1f6feb;
+  --accent-color: #1a3622; /* very dark green for main buttons */
+  --accent-hover: #2e593d;
 
-  --danger-color: #f85149;
-  --danger-hover: #da3633;
+  --danger-color: #d1413a;
+  --danger-hover: #b5312a;
 
   --success-color: #2ea043;
+  --success-bg: #d9f1cb; /* light green for successful/highlight areas */
   
-  --border-color: #30363d;
+  --border-color: #e5e2db;
   
-  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-heading: 'Playfair Display', Georgia, serif;
 }
 
 * {
@@ -36,42 +39,66 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5em;
+}
+
+h3 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5em;
+}
+
 a {
-  color: var(--accent-color);
-  text-decoration: none;
-  transition: color 0.2s ease;
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--border-color);
+  text-underline-offset: 4px;
+  transition: all 0.2s ease;
 }
 
 a:hover {
-  text-decoration: underline;
+  text-decoration-color: var(--accent-color);
 }
 
 button {
   cursor: pointer;
   font-family: var(--font-main);
   border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.9rem;
+  border-radius: 50px; /* Pill shape */
+  padding: 10px 24px;
+  font-size: 0.95rem;
   font-weight: 500;
   transition: all 0.2s ease;
 }
 
 input, textarea {
   font-family: var(--font-main);
-  background-color: var(--bg-color);
+  background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 10px 12px;
-  border-radius: 6px;
+  padding: 14px 20px;
+  border-radius: 50px; /* Pill shape for inputs */
   width: 100%;
   font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+textarea {
+  border-radius: 20px; /* Less rounded for textareas */
 }
 
 input:focus, textarea:focus {
   outline: none;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.3);
+  border-color: var(--text-secondary);
+  box-shadow: 0 0 0 3px rgba(26, 54, 34, 0.1);
 }
 
 .container {
@@ -84,9 +111,16 @@ input:focus, textarea:focus {
 .card {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
+  border-radius: 24px; /* Softer, larger radius for floating elements */
+  padding: 30px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); /* Soft shadow */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
 }
 
 .btn-primary {
@@ -96,16 +130,18 @@ input:focus, textarea:focus {
 
 .btn-primary:hover:not(:disabled) {
   background-color: var(--accent-hover);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background-color: var(--bg-surface-hover);
+  background-color: transparent;
   color: var(--text-primary);
   border: 1px solid var(--border-color);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: var(--border-color);
+  background-color: var(--bg-surface-hover);
+  border-color: var(--text-muted);
 }
 
 .btn-danger {
@@ -122,9 +158,10 @@ input:focus, textarea:focus {
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
-/* Custom Scrollbar for dark theme */
+/* Custom Scrollbar for bright theme */
 ::-webkit-scrollbar {
   width: 8px;
 }

@@ -6,12 +6,14 @@ import Profile from './pages/Profile';
 import SinglePost from './pages/SinglePost';
 import AdminDashboard from './pages/AdminDashboard';
 import useAuthStore from './store/authStore';
+import GlobalDialogs from './components/GlobalDialogs';
 
 function App() {
   const { user } = useAuthStore();
 
   return (
     <Router>
+      <GlobalDialogs />
       <Routes>
         <Route
           path="/"

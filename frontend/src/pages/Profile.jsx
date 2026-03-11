@@ -4,6 +4,8 @@ import api from '../services/api';
 import useAuthStore from '../store/authStore';
 import { ArrowLeft, UserPlus, UserMinus, ShieldAlert, MessageCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import LoadingScreen from '../components/LoadingScreen';
+import { showAlert, showConfirm } from '../store/dialogStore';
 
 const Profile = () => {
     const { username } = useParams();
@@ -16,6 +18,12 @@ const Profile = () => {
     const [error, setError] = useState(null);
     const [editingPostId, setEditingPostId] = useState(null);
     const [editContent, setEditContent] = useState('');
+
+    // Password change state
+    const [showPasswordChange, setShowPasswordChange] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [passwordMessage, setPasswordMessage] = useState({ type: '', text: '' });
 
     useEffect(() => {
         fetchProfile();
@@ -56,17 +64,17 @@ const Profile = () => {
                 });
             }
         } catch (err) {
-            alert('Failed to follow/unfollow');
+            showAlert('Failed to follow/unfollow');
         }
     };
 
     const handleDeletePost = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this confession?')) return;
+        if (!(await showConfirm('Are you sure you want to delete this confession?'))) return;
         try {
             await api.delete(`/posts/${id}`);
             setPosts(posts.filter(p => p._id !== id));
         } catch (err) {
-            alert('Failed to delete post');
+            showAlert('Failed to delete post');
         }
     };
 
@@ -78,11 +86,31 @@ const Profile = () => {
             setEditingPostId(null);
             setEditContent('');
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to edit post');
+            showAlert(err.response?.data?.message || 'Failed to edit post');
         }
     };
 
-    if (loading) return <div className="container" style={{ marginTop: '40px', textAlign: 'center' }}>Loading profile...</div>;
+    const handlePasswordChange = async (e) => {
+        e.preventDefault();
+        setPasswordMessage({ type: '', text: '' });
+        
+        if (newPassword.length < 6) {
+            setPasswordMessage({ type: 'error', text: 'New password must be at least 6 characters' });
+            return;
+        }
+
+        try {
+            const { data } = await api.put('/users/password', { currentPassword, newPassword });
+            setPasswordMessage({ type: 'success', text: data.message });
+            setCurrentPassword('');
+            setNewPassword('');
+            setTimeout(() => setShowPasswordChange(false), 2000);
+        } catch (err) {
+            setPasswordMessage({ type: 'error', text: err.response?.data?.message || 'Failed to change password' });
+        }
+    };
+
+    if (loading) return <LoadingScreen text="Loading profile..." />;
     if (error || !profile) return <div className="container" style={{ marginTop: '40px', color: 'var(--danger-color)' }}>{error}</div>;
 
     const isOwnProfile = currentUser._id === profile._id;
@@ -95,7 +123,7 @@ const Profile = () => {
             </button>
 
             <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px' }}>
-                <img src={profile.avatarUrl} alt="avatar" style={{ width: '120px', borderRadius: '50%', backgroundColor: '#21262d', marginBottom: '20px' }} />
+                <img src={profile.avatarUrl} alt="avatar" style={{ width: '120px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', marginBottom: '20px' }} />
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
                     <h2 style={{ margin: 0 }}>{profile.username}</h2>
@@ -122,6 +150,49 @@ const Profile = () => {
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Following</div>
                     </div>
                 </div>
+
+                {isOwnProfile && (
+                    <div style={{ marginTop: '20px', width: '100%', maxWidth: '300px' }}>
+                        <button 
+                            className="btn-secondary" 
+                            style={{ width: '100%', marginBottom: '10px' }}
+                            onClick={() => setShowPasswordChange(!showPasswordChange)}
+                        >
+                            {showPasswordChange ? 'Cancel Password Change' : 'Change Password'}
+                        </button>
+                        
+                        {showPasswordChange && (
+                            <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <input
+                                    type="password"
+                                    placeholder="Current Password"
+                                    className="form-control"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    required
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="New Password"
+                                    className="form-control"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    required
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                                />
+                                <button type="submit" className="btn-primary" style={{ padding: '8px' }}>
+                                    Update Password
+                                </button>
+                                {passwordMessage.text && (
+                                    <div style={{ color: passwordMessage.type === 'error' ? 'var(--danger-color)' : 'var(--primary-color)', fontSize: '0.9rem', textAlign: 'center' }}>
+                                        {passwordMessage.text}
+                                    </div>
+                                )}
+                            </form>
+                        )}
+                    </div>
+                )}
 
                 {!isOwnProfile && (
                     <button

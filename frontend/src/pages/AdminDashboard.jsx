@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
 import { ShieldAlert, Trash2, ArrowLeft, RefreshCw, EyeOff, Eye } from 'lucide-react';
+import { showAlert } from '../store/dialogStore';
 import { useNavigate, Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
@@ -33,7 +34,7 @@ const AdminDashboard = () => {
             }
         } catch (err) {
             console.error(err);
-            alert('Failed to fetch admin data');
+            showAlert('Failed to fetch admin data');
         } finally {
             setLoading(false);
         }
@@ -45,7 +46,7 @@ const AdminDashboard = () => {
             // Remove the reviewed report from the pending list
             setReports(reports.filter(r => r._id !== reportId));
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to act on report');
+            showAlert(err.response?.data?.message || 'Failed to act on report');
         }
     };
 
@@ -55,7 +56,7 @@ const AdminDashboard = () => {
             // Update local state
             setUsers(users.map(u => u._id === userId ? { ...u, status: newStatus } : u));
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to update user status');
+            showAlert(err.response?.data?.message || 'Failed to update user status');
         }
     };
 
@@ -65,7 +66,7 @@ const AdminDashboard = () => {
             // Update local state
             setUsers(users.map(u => u._id === userId ? { ...u, role: newRole } : u));
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to update user role');
+            showAlert(err.response?.data?.message || 'Failed to update user role');
         }
     };
 
@@ -111,7 +112,7 @@ const AdminDashboard = () => {
                             <div key={report._id} className="card" style={{ borderLeft: '4px solid var(--danger-color)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
                                     <div>
-                                        <span style={{ backgroundColor: '#21262d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', marginRight: '10px' }}>
+                                        <span style={{ backgroundColor: 'var(--bg-surface-hover)', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', marginRight: '10px' }}>
                                             {report.type.toUpperCase()}
                                         </span>
                                         <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
@@ -156,7 +157,7 @@ const AdminDashboard = () => {
                 <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
-                            <tr style={{ backgroundColor: '#21262d', borderBottom: '1px solid var(--border-color)' }}>
+                            <tr style={{ backgroundColor: 'var(--bg-surface-hover)', borderBottom: '1px solid var(--border-color)' }}>
                                 <th style={{ padding: '15px' }}>Username</th>
                                 <th style={{ padding: '15px' }}>Role</th>
                                 <th style={{ padding: '15px' }}>Warnings</th>

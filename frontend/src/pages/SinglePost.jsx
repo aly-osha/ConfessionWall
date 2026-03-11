@@ -4,6 +4,8 @@ import api from '../services/api';
 import useAuthStore from '../store/authStore';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft, Flag } from 'lucide-react';
+import LoadingScreen from '../components/LoadingScreen';
+import { showAlert, showConfirm } from '../store/dialogStore';
 
 const SinglePost = () => {
     const { id } = useParams();
@@ -59,17 +61,17 @@ const SinglePost = () => {
             setNewComment('');
             setPost({ ...post, commentCount: post.commentCount + 1 });
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to add comment');
+            showAlert(err.response?.data?.message || 'Failed to add comment');
         }
     };
 
     const handleDeletePost = async () => {
-        if (!window.confirm('Are you sure you want to delete this confession?')) return;
+        if (!(await showConfirm('Are you sure you want to delete this confession?'))) return;
         try {
             await api.delete(`/posts/${id}`);
             navigate('/');
         } catch (err) {
-            alert('Failed to delete post');
+            showAlert('Failed to delete post');
         }
     };
 
@@ -80,18 +82,18 @@ const SinglePost = () => {
             setPost({ ...post, content: data.content });
             setIsEditing(false);
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to edit post');
+            showAlert(err.response?.data?.message || 'Failed to edit post');
         }
     };
 
     const handleDeleteComment = async (commentId) => {
-        if (!window.confirm('Delete this comment?')) return;
+        if (!(await showConfirm('Delete this comment?'))) return;
         try {
             await api.delete(`/comments/${commentId}`);
             setComments(comments.filter(c => c._id !== commentId));
             setPost({ ...post, commentCount: post.commentCount - 1 });
         } catch (err) {
-            alert('Failed to delete comment');
+            showAlert('Failed to delete comment');
         }
     };
 
@@ -105,15 +107,15 @@ const SinglePost = () => {
                 targetId: reportingItem.id,
                 reason: reportReason
             });
-            alert('Report submitted successfully. Thank you.');
+            showAlert('Report submitted successfully. Thank you.');
             setReportingItem(null);
             setReportReason('');
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to submit report');
+            showAlert(err.response?.data?.message || 'Failed to submit report');
         }
     };
 
-    if (loading) return <div className="container" style={{ marginTop: '40px', textAlign: 'center' }}>Loading...</div>;
+    if (loading) return <LoadingScreen text="Loading..." />;
     if (error || !post) return <div className="container" style={{ marginTop: '40px', color: 'var(--danger-color)' }}>{error || 'Post not found'}</div>;
 
     return (
@@ -153,7 +155,7 @@ const SinglePost = () => {
                 )}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                    <img src={post.author.avatarUrl} alt="avatar" style={{ width: '50px', borderRadius: '50%', backgroundColor: '#21262d' }} />
+                    <img src={post.author.avatarUrl} alt="avatar" style={{ width: '50px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)' }} />
                     <div>
                         <Link to={`/profile/${post.author.username}`} style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
                             {post.author.username}
@@ -228,7 +230,7 @@ const SinglePost = () => {
                     <div key={comment._id} className="card" style={{ padding: '15px', position: 'relative' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <img src={comment.author.avatarUrl} alt="avatar" style={{ width: '30px', borderRadius: '50%', backgroundColor: '#21262d' }} />
+                                <img src={comment.author.avatarUrl} alt="avatar" style={{ width: '30px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)' }} />
                                 <div>
                                     <Link to={`/profile/${comment.author.username}`} style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
                                         {comment.author.username}

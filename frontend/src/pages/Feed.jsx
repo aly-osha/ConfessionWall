@@ -4,6 +4,8 @@ import api from '../services/api';
 import { LogOut, User as UserIcon, ShieldAlert, Flag } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
+import LoadingScreen from '../components/LoadingScreen';
+import { showAlert, showConfirm } from '../store/dialogStore';
 
 const Feed = () => {
     const { user, logout } = useAuthStore();
@@ -47,12 +49,12 @@ const Feed = () => {
     };
 
     const handleDeletePost = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this confession?')) return;
+        if (!(await showConfirm('Are you sure you want to delete this confession?'))) return;
         try {
             await api.delete(`/posts/${id}`);
             setPosts(posts.filter(p => p._id !== id));
         } catch (err) {
-            alert('Failed to delete post');
+            showAlert('Failed to delete post');
         }
     };
 
@@ -64,7 +66,7 @@ const Feed = () => {
             setEditingPostId(null);
             setEditContent('');
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to edit post');
+            showAlert(err.response?.data?.message || 'Failed to edit post');
         }
     };
 
@@ -93,11 +95,11 @@ const Feed = () => {
                 targetId: reportingItem.id,
                 reason: reportReason
             });
-            alert('Report submitted successfully. Thank you.');
+            showAlert('Report submitted successfully. Thank you.');
             setReportingItem(null);
             setReportReason('');
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to submit report');
+            showAlert(err.response?.data?.message || 'Failed to submit report');
         }
     };
 
@@ -148,7 +150,7 @@ const Feed = () => {
             {/* Feed List */}
             <div>
                 {loading ? (
-                    <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Loading secrets...</p>
+                    <LoadingScreen text="Loading secrets..." />
                 ) : posts.length === 0 ? (
                     <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>The wall is completely empty.</p>
                 ) : (
@@ -156,7 +158,7 @@ const Feed = () => {
                         <div key={post._id} className="card" style={{ padding: '25px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <img src={post.author.avatarUrl} alt="avatar" style={{ width: '40px', borderRadius: '50%', backgroundColor: '#21262d' }} />
+                                    <img src={post.author.avatarUrl} alt="avatar" style={{ width: '40px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)' }} />
                                     <div>
                                         <Link to={`/profile/${post.author.username}`} style={{ fontWeight: 'bold' }}>
                                             {post.author.username}

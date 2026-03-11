@@ -6,13 +6,15 @@ const {
     getMe,
     getUserProfile,
     followUser,
-    unfollowUser
+    unfollowUser,
+    changePassword
 } = require('../controllers/userController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.get('/me', protect, getMe);
+router.put('/password', protect, changePassword);
 
 // Order matters: specific routes before dynamic parameters
 router.post('/:id/follow', protect, followUser);
