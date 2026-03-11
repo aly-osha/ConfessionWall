@@ -78,5 +78,3 @@ Access the app at `http://localhost:5173` (proxying API to `http://localhost:500
 ## 👥 Built By
 - Ajay M Mathew
 - BCA Final Year Project
-
-\
