@@ -22,6 +22,8 @@ const SinglePost = () => {
     const [reportingItem, setReportingItem] = useState(null); // { id, type: 'post' | 'comment' }
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState('');
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editCommentContent, setEditCommentContent] = useState('');
 
     useEffect(() => {
         fetchPostAndComments();
@@ -94,6 +96,18 @@ const SinglePost = () => {
             setPost({ ...post, commentCount: post.commentCount - 1 });
         } catch (err) {
             showAlert('Failed to delete comment');
+        }
+    };
+
+    const handleEditCommentSubmit = async (commentId) => {
+        if (!editCommentContent.trim()) return;
+        try {
+            const { data } = await api.put(`/comments/${commentId}`, { content: editCommentContent });
+            setComments(comments.map(c => c._id === commentId ? { ...c, content: data.content } : c));
+            setEditingCommentId(null);
+            setEditCommentContent('');
+        } catch (err) {
+            showAlert(err.response?.data?.message || 'Failed to edit comment');
         }
     };
 
@@ -242,6 +256,22 @@ const SinglePost = () => {
                             </div>
 
                             <div style={{ display: 'flex', gap: '10px' }}>
+                                {(user._id === comment.author._id) && (
+                                    <button
+                                        onClick={() => {
+                                            if (editingCommentId === comment._id) {
+                                                setEditingCommentId(null);
+                                            } else {
+                                                setEditCommentContent(comment.content);
+                                                setEditingCommentId(comment._id);
+                                            }
+                                        }}
+                                        className="btn-secondary"
+                                        style={{ padding: '2px 6px', fontSize: '0.7rem' }}
+                                    >
+                                        {editingCommentId === comment._id ? 'Cancel' : 'Edit'}
+                                    </button>
+                                )}
                                 {(user._id === comment.author._id || user.role === 'admin' || user.role === 'moderator') && (
                                     <button
                                         onClick={() => handleDeleteComment(comment._id)}
@@ -259,7 +289,20 @@ const SinglePost = () => {
                                 </button>
                             </div>
                         </div>
-                        <p style={{ fontSize: '0.95rem', marginLeft: '40px' }}>{comment.content}</p>
+                        {editingCommentId === comment._id ? (
+                            <div style={{ marginLeft: '40px', marginTop: '10px' }}>
+                                <textarea
+                                    value={editCommentContent}
+                                    onChange={(e) => setEditCommentContent(e.target.value)}
+                                    rows="2"
+                                    maxLength={500}
+                                    style={{ width: '100%', marginBottom: '10px', padding: '10px', resize: 'vertical' }}
+                                />
+                                <button onClick={() => handleEditCommentSubmit(comment._id)} className="btn-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>Save Changes</button>
+                            </div>
+                        ) : (
+                            <p style={{ fontSize: '0.95rem', marginLeft: '40px', whiteSpace: 'pre-wrap' }}>{comment.content}</p>
+                        )}
                     </div>
                 ))}
             </div>

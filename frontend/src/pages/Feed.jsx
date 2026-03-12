@@ -18,6 +18,7 @@ const Feed = () => {
     const [reportReason, setReportReason] = useState('');
     const [editingPostId, setEditingPostId] = useState(null);
     const [editContent, setEditContent] = useState('');
+    const [showPostModal, setShowPostModal] = useState(false);
 
     useEffect(() => {
         fetchPosts();
@@ -43,6 +44,7 @@ const Feed = () => {
             const { data } = await api.post('/posts', { content: newPost });
             setPosts([data, ...posts]);
             setNewPost('');
+            setShowPostModal(false);
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to post confession');
         }
@@ -126,25 +128,6 @@ const Feed = () => {
                         <LogOut size={16} /> Logout
                     </button>
                 </div>
-            </div>
-
-            {/* Post Box */}
-            <div className="card">
-                <form onSubmit={handlePostSubmit}>
-                    <textarea
-                        placeholder="Confess something anonymously... (No bullying, or you will be banned)"
-                        rows="3"
-                        value={newPost}
-                        onChange={(e) => setNewPost(e.target.value)}
-                        maxLength={1000}
-                        style={{ marginBottom: '10px', resize: 'vertical' }}
-                    />
-                    {error && <div style={{ color: 'var(--danger-color)', marginBottom: '10px', fontSize: '0.9rem' }}>{error}</div>}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <small style={{ color: 'var(--text-muted)' }}>Verified by AI Moderation</small>
-                        <button type="submit" className="btn-primary" disabled={!newPost.trim()}>Post Confession</button>
-                    </div>
-                </form>
             </div>
 
             {/* Feed List */}
@@ -254,6 +237,67 @@ const Feed = () => {
                             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                                 <button type="button" className="btn-secondary" onClick={() => setReportingItem(null)}>Cancel</button>
                                 <button type="submit" className="btn-danger" style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}>Submit Report</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Floating Action Button */}
+            <button
+                onClick={() => setShowPostModal(true)}
+                style={{
+                    position: 'fixed',
+                    bottom: '40px',
+                    right: '40px',
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '30px',
+                    backgroundColor: 'var(--primary-color)',
+                    color: 'white',
+                    border: 'none',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    fontSize: '32px',
+                    cursor: 'pointer',
+                    zIndex: 900,
+                    transition: 'transform 0.2s',
+                }}
+                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+                +
+            </button>
+
+            {/* New Post Modal */}
+            {showPostModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+                }}>
+                    <div className="card" style={{ width: '500px', maxWidth: '90vw' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h3 style={{ margin: 0 }}>Create a Confession</h3>
+                            <button onClick={() => setShowPostModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
+                        </div>
+                        <form onSubmit={handlePostSubmit}>
+                            <textarea
+                                placeholder="Confess something anonymously... (No bullying, or you will be banned)"
+                                rows="5"
+                                value={newPost}
+                                onChange={(e) => setNewPost(e.target.value)}
+                                maxLength={1000}
+                                style={{ width: '100%', marginBottom: '10px', padding: '15px', resize: 'vertical', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}
+                            />
+                            {error && <div style={{ color: 'var(--danger-color)', marginBottom: '10px', fontSize: '0.9rem' }}>{error}</div>}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                                <small style={{ color: 'var(--text-muted)' }}>Verified by AI Moderation</small>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button type="button" className="btn-secondary" onClick={() => setShowPostModal(false)}>Cancel</button>
+                                    <button type="submit" className="btn-primary" disabled={!newPost.trim() || loading}>Post Confession</button>
+                                </div>
                             </div>
                         </form>
                     </div>

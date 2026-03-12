@@ -121,7 +121,7 @@ const deletePost = async (req, res, next) => {
         }
 
         // Use deleteOne() instead of remove() in newer Mongoose versions
-        await Post.deleteOne({ _id: post._id });
+        await Post.findByIdAndDelete(post._id);
 
         // Also delete associated comments
         await Comment.deleteMany({ post: post._id });
@@ -324,12 +324,54 @@ const deleteComment = async (req, res, next) => {
         const postId = comment.post;
 
         // Use deleteOne() instead of remove()
-        await Comment.deleteOne({ _id: comment._id });
+        await Comment.findByIdAndDelete(comment._id);
 
         // Update comment count on post
         await Post.findByIdAndUpdate(postId, { $inc: { commentCount: -1 } });
 
         res.json({ id: req.params.id, message: 'Comment deleted' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Update a comment
+// @route   PUT /api/comments/:id
+// @access  Private
+const updateComment = async (req, res, next) => {
+    try {
+        const comment = await Comment.findById(req.params.id);
+
+        if (!comment) {
+            res.status(404);
+            throw new Error('Comment not found');
+        }
+
+        // Check if user is the author
+        if (comment.author.toString() !== req.user.id) {
+            res.status(401);
+            throw new Error('User not authorized to edit this comment');
+        }
+
+        const { content } = req.body;
+        if (!content) {
+            res.status(400);
+            throw new Error('Please add content');
+        }
+
+        // AI MODERATION CHECK
+        const moderationResult = await moderateContent(content);
+
+        if (moderationResult.isFlagged) {
+            res.status(400);
+            throw new Error(`Comment update rejected: ${moderationResult.reason}`);
+        }
+
+        comment.content = content;
+        await comment.save();
+
+        const populatedComment = await Comment.findById(comment._id).populate('author', 'username avatarUrl');
+        res.json(populatedComment);
     } catch (error) {
         next(error);
     }
@@ -346,5 +388,6 @@ module.exports = {
     downvotePost,
     getComments,
     addComment,
-    deleteComment
+    deleteComment,
+    updateComment
 };
