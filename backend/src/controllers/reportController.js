@@ -2,6 +2,7 @@ const Report = require('../models/Report');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 
 const REPORT_THRESHOLD = 5;
 const WARNING_LIMIT = 3;
@@ -59,6 +60,17 @@ const createReport = async (req, res, next) => {
         }
 
         await targetDoc.save();
+
+        // Notify admins and moderators
+        const staffUsers = await User.find({ role: { $in: ['admin', 'moderator'] } });
+        const notifications = staffUsers.map(staff => ({
+            recipient: staff._id,
+            message: `New report submitted for a ${type}.`,
+            link: '/admin'
+        }));
+        if (notifications.length > 0) {
+            await Notification.insertMany(notifications);
+        }
 
         res.status(201).json({ message: 'Report submitted successfully' });
     } catch (error) {
@@ -132,9 +144,17 @@ const reviewReport = async (req, res, next) => {
         }
 
         if (targetDoc) {
-            // Ensure content is hidden
-            targetDoc.isHidden = true;
-            await targetDoc.save();
+            // Delete content instead of hiding
+            if (report.type.toLowerCase() === 'post') {
+                await Post.findByIdAndDelete(targetDoc._id);
+                await Comment.deleteMany({ post: targetDoc._id });
+            } else {
+                const commentPostId = targetDoc.post;
+                await Comment.findByIdAndDelete(targetDoc._id);
+                if (commentPostId) {
+                    await Post.findByIdAndUpdate(commentPostId, { $inc: { commentCount: -1 } });
+                }
+            }
 
             // Take action on author
             const author = await User.findById(targetDoc.author);
@@ -150,6 +170,22 @@ const reviewReport = async (req, res, next) => {
                     }
                 }
                 await author.save();
+
+                // Notify User
+                let notificationMsg = '';
+                if (action === 'ban') {
+                    notificationMsg = `Your account has been permanently banned due to a report on your ${report.type.toLowerCase()}: "${targetDoc.content.substring(0, 30)}..."`;
+                } else if (action === 'warn') {
+                    notificationMsg = `You have received a warning and your ${report.type.toLowerCase()} was deleted due to a report: "${targetDoc.content.substring(0, 30)}..."`;
+                }
+
+                if (notificationMsg) {
+                    await Notification.create({
+                        recipient: author._id,
+                        message: notificationMsg,
+                        link: `/profile/${author.username}`
+                    });
+                }
             }
         }
 

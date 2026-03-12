@@ -4,6 +4,7 @@ import api from '../services/api';
 import { ShieldAlert, Trash2, ArrowLeft, RefreshCw, EyeOff, Eye } from 'lucide-react';
 import { showAlert } from '../store/dialogStore';
 import { useNavigate, Link } from 'react-router-dom';
+import NotificationBell from '../components/NotificationBell';
 
 const AdminDashboard = () => {
     const { user } = useAuthStore();
@@ -81,9 +82,12 @@ const AdminDashboard = () => {
                         <ShieldAlert size={24} /> {user?.role === 'moderator' ? 'Moderator Dashboard' : 'Security Dashboard'}
                     </h2>
                 </div>
-                <button onClick={fetchData} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <RefreshCw size={16} /> Refresh
-                </button>
+                <div style={{ display: 'flex', gap: '15px' }}>
+                    <NotificationBell />
+                    <button onClick={fetchData} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <RefreshCw size={16} /> Refresh
+                    </button>
+                </div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
@@ -121,14 +125,14 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
 
-                                <div style={{ backgroundColor: '#0d1117', padding: '15px', borderRadius: '6px', marginBottom: '15px' }}>
+                                <div style={{ backgroundColor: 'var(--bg-surface-hover)', padding: '15px', borderRadius: '6px', marginBottom: '15px' }}>
                                     <p style={{ fontWeight: 'bold', marginBottom: '5px', color: 'var(--danger-color)' }}>Reason: {report.reason}</p>
                                     <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Target Content:</p>
-                                    <p style={{ fontStyle: 'italic', borderLeft: '2px solid var(--border-color)', paddingLeft: '10px' }}>
+                                    <p style={{ fontStyle: 'italic', borderLeft: '2px solid var(--border-color)', paddingLeft: '10px', color: 'var(--text-primary)' }}>
                                         "{report.targetId?.content || '[Content Deleted]'}"
                                     </p>
                                     {report.targetId && (
-                                        <div style={{ marginTop: '10px', fontSize: '0.85rem' }}>
+                                        <div style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                             <span style={{ marginRight: '15px' }}>Author: {report.targetId.author?.username}</span>
                                             <span style={{ marginRight: '15px' }}>Warnings: <span style={{ color: 'var(--danger-color)' }}>{report.targetId.author?.warningCount}</span></span>
                                             <span>Hidden Status: {report.targetId.isHidden ? <EyeOff size={14} style={{ verticalAlign: 'middle' }} /> : <Eye size={14} style={{ verticalAlign: 'middle' }} />} {report.targetId.isHidden ? 'Yes' : 'No'}</span>
@@ -141,11 +145,11 @@ const AdminDashboard = () => {
                                         Dismiss (Ignore)
                                     </button>
                                     <button onClick={() => handleReviewReport(report._id, 'warn')} className="btn-primary" style={{ backgroundColor: '#cc6b2e' }}>
-                                        Warn User & Hide Content
+                                        Warn User & Delete Content
                                     </button>
                                     {user.role === 'admin' && (
                                         <button onClick={() => handleReviewReport(report._id, 'ban')} className="btn-danger" style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}>
-                                            Ban User & Hide Content
+                                            Ban User & Delete Content
                                         </button>
                                     )}
                                 </div>

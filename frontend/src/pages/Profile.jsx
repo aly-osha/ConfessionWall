@@ -6,6 +6,7 @@ import { ArrowLeft, UserPlus, UserMinus, ShieldAlert, MessageCircle } from 'luci
 import { formatDistanceToNow } from 'date-fns';
 import LoadingScreen from '../components/LoadingScreen';
 import { showAlert, showConfirm } from '../store/dialogStore';
+import NotificationBell from '../components/NotificationBell';
 
 const Profile = () => {
     const { username } = useParams();
@@ -23,6 +24,7 @@ const Profile = () => {
     const [showPasswordChange, setShowPasswordChange] = useState(false);
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [passwordMessage, setPasswordMessage] = useState({ type: '', text: '' });
 
     useEffect(() => {
@@ -99,11 +101,17 @@ const Profile = () => {
             return;
         }
 
+        if (newPassword !== confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'New passwords do not match' });
+            return;
+        }
+
         try {
             const { data } = await api.put('/users/password', { currentPassword, newPassword });
             setPasswordMessage({ type: 'success', text: data.message });
             setCurrentPassword('');
             setNewPassword('');
+            setConfirmPassword('');
             setTimeout(() => setShowPasswordChange(false), 2000);
         } catch (err) {
             setPasswordMessage({ type: 'error', text: err.response?.data?.message || 'Failed to change password' });
@@ -118,9 +126,12 @@ const Profile = () => {
 
     return (
         <div className="container" style={{ marginTop: '40px' }}>
-            <button onClick={() => navigate(-1)} className="btn-secondary" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <ArrowLeft size={16} /> Back
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <button onClick={() => navigate(-1)} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <ArrowLeft size={16} /> Back
+                </button>
+                <NotificationBell />
+            </div>
 
             <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px' }}>
                 <img src={profile.avatarUrl} alt="avatar" style={{ width: '120px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', marginBottom: '20px' }} />
@@ -178,6 +189,15 @@ const Profile = () => {
                                     className="form-control"
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
+                                    required
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Confirm New Password"
+                                    className="form-control"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
                                     style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                                 />

@@ -34,6 +34,7 @@ app.use('/api/posts', require('./src/routes/postRoutes'));
 app.use('/api/comments', require('./src/routes/commentRoutes'));
 app.use('/api/reports', require('./src/routes/reportRoutes'));
 app.use('/api/admin', require('./src/routes/adminRoutes'));
+app.use('/api/notifications', require('./src/routes/notificationRoutes'));
 
 app.get('/', (req, res) => {
     res.send('Confession Wall API is running...');

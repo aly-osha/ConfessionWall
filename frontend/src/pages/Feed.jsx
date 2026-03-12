@@ -5,6 +5,7 @@ import { LogOut, User as UserIcon, ShieldAlert, Flag } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import LoadingScreen from '../components/LoadingScreen';
+import NotificationBell from '../components/NotificationBell';
 import { showAlert, showConfirm } from '../store/dialogStore';
 
 const Feed = () => {
@@ -117,14 +118,15 @@ const Feed = () => {
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>💭 Confession Wall</h2>
                 <div style={{ display: 'flex', gap: '15px' }}>
                     {(user.role === 'admin' || user.role === 'moderator') && (
-                        <Link to="/admin" className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Link to="/admin" className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px', border: 'none' }}>
                             <ShieldAlert size={16} /> Dashboard
                         </Link>
                     )}
-                    <Link to={`/profile/${user.username}`} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <NotificationBell />
+                    <Link to={`/profile/${user.username}`} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px', border: 'none' }}>
                         <UserIcon size={16} /> {user.username}
                     </Link>
-                    <button onClick={onLogout} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <button onClick={onLogout} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px', border: 'none' }}>
                         <LogOut size={16} /> Logout
                     </button>
                 </div>
@@ -253,7 +255,7 @@ const Feed = () => {
                     width: '60px',
                     height: '60px',
                     borderRadius: '30px',
-                    backgroundColor: 'var(--primary-color)',
+                    backgroundColor: 'var(--accent-color)',
                     color: 'white',
                     border: 'none',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
