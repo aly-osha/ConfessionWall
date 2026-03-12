@@ -38,13 +38,20 @@ const NotificationBell = () => {
     };
 
     const handleBellClick = async () => {
-        setIsOpen(!isOpen);
-        if (!isOpen && unreadCount > 0) {
+        const willBeOpen = !isOpen;
+        setIsOpen(willBeOpen);
+        
+        // Only run when opening the bell
+        if (willBeOpen) {
             try {
-                await api.put('/notifications/read');
-                // Optimistically clear the dot
-                setUnreadCount(0);
-                setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+                // Determine if we need to ping read endpoint
+                const hasUnread = notifications.some(n => !n.isRead);
+                if (hasUnread) {
+                    await api.put('/notifications/read');
+                    // Reflect change locally
+                    setUnreadCount(0);
+                    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+                }
             } catch (error) {
                 console.error('Failed to mark notifications as read', error);
             }

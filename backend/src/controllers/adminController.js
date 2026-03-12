@@ -1,4 +1,8 @@
 const User = require('../models/User');
+const Post = require('../models/Post');
+const Comment = require('../models/Comment');
+const Notification = require('../models/Notification');
+const Report = require('../models/Report');
 
 // @desc    Get all users
 // @route   GET /api/admin/users
@@ -101,8 +105,65 @@ const updateUserRole = async (req, res, next) => {
     }
 };
 
+// @desc    Flush database (delete hidden posts/comments, read notifications, reviewed reports)
+// @route   DELETE /api/admin/flush-db
+// @access  Private/Admin
+const flushDatabase = async (req, res, next) => {
+    try {
+        const postsResult = await Post.deleteMany({ isHidden: true });
+        const commentsResult = await Comment.deleteMany({ isHidden: true });
+        const notificationsResult = await Notification.deleteMany({ isRead: true });
+        const reportsResult = await Report.deleteMany({ status: { $in: ['reviewed', 'dismissed'] } });
+
+        res.json({
+            message: 'Database flushed successfully',
+            deletedCounts: {
+                posts: postsResult.deletedCount,
+                comments: commentsResult.deletedCount,
+                notifications: notificationsResult.deletedCount,
+                reports: reportsResult.deletedCount
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Delete User and Associated Data
+// @route   DELETE /api/admin/users/:id
+// @access  Private/Admin
+const deleteUser = async (req, res, next) => {
+    try {
+        const userId = req.params.id;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            res.status(404);
+            throw new Error('User not found');
+        }
+
+        // Prevent admin from deleting themselves or other admins
+        if (user.role === 'admin') {
+            res.status(403);
+            throw new Error('You cannot delete an admin account');
+        }
+
+        // Hard copy data IDs to cleanup
+        await Post.deleteMany({ author: userId });
+        await Comment.deleteMany({ author: userId });
+        await Notification.deleteMany({ recipient: userId });
+        await User.findByIdAndDelete(userId);
+
+        res.json({ message: 'User and all associated data permanently deleted' });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getUsers,
     updateUserStatus,
-    updateUserRole
+    updateUserRole,
+    flushDatabase,
+    deleteUser
 }

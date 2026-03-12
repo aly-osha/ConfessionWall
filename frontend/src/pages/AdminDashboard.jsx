@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
 import { ShieldAlert, Trash2, ArrowLeft, RefreshCw, EyeOff, Eye } from 'lucide-react';
-import { showAlert } from '../store/dialogStore';
+import { showAlert, showConfirm } from '../store/dialogStore';
 import { useNavigate, Link } from 'react-router-dom';
 import NotificationBell from '../components/NotificationBell';
 
@@ -68,6 +68,33 @@ const AdminDashboard = () => {
             setUsers(users.map(u => u._id === userId ? { ...u, role: newRole } : u));
         } catch (err) {
             showAlert(err.response?.data?.message || 'Failed to update user role');
+        }
+    };
+
+    const handleFlushDb = async () => {
+        const confirmed = await showConfirm('Are you sure you want to flush the database? This action will permanently delete hidden posts/comments, read notifications, and reviewed/dismissed reports and cannot be undone.');
+        if (confirmed) {
+            try {
+                const { data } = await api.delete('/admin/flush-db');
+                showAlert(`Database flushed! Deleted: ${data.deletedCounts.posts} posts, ${data.deletedCounts.comments} comments, ${data.deletedCounts.notifications} notifications, ${data.deletedCounts.reports} reports.`);
+                // Refresh data
+                fetchData();
+            } catch (err) {
+                showAlert(err.response?.data?.message || 'Failed to flush database');
+            }
+        }
+    };
+
+    const handleDeleteUser = async (userId) => {
+        const confirmed = await showConfirm('Are you sure you want to permanently delete this user and all their content? This cannot be undone.');
+        if (confirmed) {
+            try {
+                await api.delete(`/admin/users/${userId}`);
+                setUsers(users.filter(u => u._id !== userId));
+                showAlert('User successfully deleted');
+            } catch (err) {
+                showAlert(err.response?.data?.message || 'Failed to delete user');
+            }
         }
     };
 
@@ -202,7 +229,7 @@ const AdminDashboard = () => {
                                             {u.status.toUpperCase()}
                                         </span>
                                     </td>
-                                    <td style={{ padding: '15px' }}>
+                                    <td style={{ padding: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
                                         <select
                                             value={u.status}
                                             onChange={(e) => handleUserStatusChange(u._id, e.target.value)}
@@ -217,12 +244,57 @@ const AdminDashboard = () => {
                                             <option value="temp_banned">Temp Banned</option>
                                             <option value="perm_banned">Perm Banned</option>
                                         </select>
+                                        
+                                        <button 
+                                            onClick={() => handleDeleteUser(u._id)}
+                                            disabled={u._id === user._id || (user.role === 'moderator' && u.role === 'admin')}
+                                            className="btn-danger" 
+                                            style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            title="Delete User"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {/* DB Flush Floating Button - Admin Only */}
+            {user?.role === 'admin' && (
+                <button
+                    onClick={handleFlushDb}
+                    style={{
+                        position: 'fixed',
+                        bottom: '30px',
+                        right: '30px',
+                        backgroundColor: '#2ea043',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '50px',
+                        padding: '12px 24px',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(46, 160, 67, 0.4)',
+                        transition: 'transform 0.2s ease, background-color 0.2s ease',
+                        zIndex: 1000
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
+                        e.currentTarget.style.backgroundColor = '#3fb950';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                        e.currentTarget.style.backgroundColor = '#2ea043';
+                    }}
+                >
+                    <Trash2 size={20} /> DB FLUSH
+                </button>
             )}
         </div>
     );

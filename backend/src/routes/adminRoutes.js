@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getUsers, updateUserStatus, updateUserRole } = require('../controllers/adminController');
+const { getUsers, updateUserStatus, updateUserRole, flushDatabase, deleteUser } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.route('/users')
@@ -11,5 +11,11 @@ router.route('/users/:id/status')
 
 router.route('/users/:id/role')
     .put(protect, authorize('admin'), updateUserRole);
+
+router.route('/users/:id')
+    .delete(protect, authorize('admin', 'moderator'), deleteUser);
+
+router.route('/flush-db')
+    .delete(protect, authorize('admin'), flushDatabase);
 
 module.exports = router;

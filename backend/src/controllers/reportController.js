@@ -12,6 +12,7 @@ const WARNING_LIMIT = 3;
 // @access  Private
 const createReport = async (req, res, next) => {
     try {
+        console.log(`[Report API] Received report request from user ${req.user.id} for ${req.body.type} ${req.body.targetId}`);
         const { type, targetId, reason } = req.body;
 
         if (!type || !targetId || !reason) {
