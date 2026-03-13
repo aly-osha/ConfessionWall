@@ -8,6 +8,8 @@ import LoadingScreen from '../components/LoadingScreen';
 import { showAlert, showConfirm } from '../store/dialogStore';
 import NotificationBell from '../components/NotificationBell';
 
+const PASTEL_COLORS = ['#E8D0F9', '#C9F4E6', '#FBEB9F', '#FAD9D5', '#D4F1F4'];
+
 const Profile = () => {
     const { username } = useParams();
     const navigate = useNavigate();
@@ -181,7 +183,7 @@ const Profile = () => {
                                     value={currentPassword}
                                     onChange={(e) => setCurrentPassword(e.target.value)}
                                     required
-                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}
                                 />
                                 <input
                                     type="password"
@@ -190,7 +192,7 @@ const Profile = () => {
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
                                     required
-                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}
                                 />
                                 <input
                                     type="password"
@@ -199,7 +201,7 @@ const Profile = () => {
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
-                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}
                                 />
                                 <button type="submit" className="btn-primary" style={{ padding: '8px' }}>
                                     Update Password
@@ -233,8 +235,8 @@ const Profile = () => {
                 </div>
             ) : (
                 <div>
-                    {posts.map(post => (
-                        <div key={post._id} className="card" style={{ padding: '25px', marginBottom: '15px' }}>
+                    {posts.map((post, index) => (
+                        <div key={post._id} className="card" style={{ padding: '25px', marginBottom: '15px', backgroundColor: PASTEL_COLORS[index % PASTEL_COLORS.length] }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                     {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}

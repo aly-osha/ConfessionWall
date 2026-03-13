@@ -8,6 +8,8 @@ import LoadingScreen from '../components/LoadingScreen';
 import NotificationBell from '../components/NotificationBell';
 import { showAlert, showConfirm } from '../store/dialogStore';
 
+const PASTEL_COLORS = ['#E8D0F9', '#C9F4E6', '#FBEB9F', '#FAD9D5', '#D4F1F4'];
+
 const Feed = () => {
     const { user, logout } = useAuthStore();
     const navigate = useNavigate();
@@ -139,8 +141,8 @@ const Feed = () => {
                 ) : posts.length === 0 ? (
                     <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>The wall is completely empty.</p>
                 ) : (
-                    posts.map((post) => (
-                        <div key={post._id} className="card" style={{ padding: '25px' }}>
+                    posts.map((post, index) => (
+                        <div key={post._id} className="card" style={{ padding: '25px', backgroundColor: PASTEL_COLORS[index % PASTEL_COLORS.length] }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <img src={post.author.avatarUrl} alt="avatar" style={{ width: '40px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)' }} />

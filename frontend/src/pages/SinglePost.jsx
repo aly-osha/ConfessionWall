@@ -7,6 +7,8 @@ import { ArrowLeft, Flag } from 'lucide-react';
 import LoadingScreen from '../components/LoadingScreen';
 import { showAlert, showConfirm } from '../store/dialogStore';
 
+const PASTEL_COLORS = ['#E8D0F9', '#C9F4E6', '#FBEB9F', '#FAD9D5', '#D4F1F4'];
+
 const SinglePost = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -139,7 +141,7 @@ const SinglePost = () => {
             </button>
 
             {/* Main Post */}
-            <div className="card" style={{ padding: '30px', position: 'relative' }}>
+            <div className="card" style={{ padding: '30px', position: 'relative', backgroundColor: PASTEL_COLORS[0] }}>
                 {(user._id === post.author._id || user.role === 'admin' || user.role === 'moderator') && (
                     <div style={{ position: 'absolute', top: '20px', right: '20px', display: 'flex', gap: '10px' }}>
                         {user._id === post.author._id && (
@@ -240,8 +242,8 @@ const SinglePost = () => {
 
             {/* Comment List */}
             <div>
-                {comments.map((comment) => (
-                    <div key={comment._id} className="card" style={{ padding: '15px', position: 'relative' }}>
+                {comments.map((comment, index) => (
+                    <div key={comment._id} className="card" style={{ padding: '15px', position: 'relative', backgroundColor: PASTEL_COLORS[(index + 1) % PASTEL_COLORS.length] }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <img src={comment.author.avatarUrl} alt="avatar" style={{ width: '30px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)' }} />

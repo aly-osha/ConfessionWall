@@ -171,7 +171,7 @@ const AdminDashboard = () => {
                                     <button onClick={() => handleReviewReport(report._id, 'dismiss')} className="btn-secondary">
                                         Dismiss (Ignore)
                                     </button>
-                                    <button onClick={() => handleReviewReport(report._id, 'warn')} className="btn-primary" style={{ backgroundColor: '#cc6b2e' }}>
+                                    <button onClick={() => handleReviewReport(report._id, 'warn')} className="btn-primary" style={{ backgroundColor: 'var(--accent-color)', color: 'var(--bg-color)' }}>
                                         Warn User & Delete Content
                                     </button>
                                     {user.role === 'admin' && (
@@ -221,10 +221,10 @@ const AdminDashboard = () => {
                                     <td style={{ padding: '15px' }}>
                                         <span style={{
                                             padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem',
-                                            backgroundColor: u.status === 'active' ? 'rgba(46, 160, 67, 0.2)' :
-                                                u.status === 'warned' ? 'rgba(210, 153, 34, 0.2)' : 'rgba(248, 81, 73, 0.2)',
+                                            backgroundColor: u.status === 'active' ? 'rgba(56, 142, 93, 0.2)' :
+                                                u.status === 'warned' ? 'rgba(232, 168, 23, 0.2)' : 'rgba(196, 65, 88, 0.2)',
                                             color: u.status === 'active' ? 'var(--success-color)' :
-                                                u.status === 'warned' ? '#d29922' : 'var(--danger-color)'
+                                                u.status === 'warned' ? 'var(--accent-color)' : 'var(--danger-color)'
                                         }}>
                                             {u.status.toUpperCase()}
                                         </span>
@@ -270,7 +270,7 @@ const AdminDashboard = () => {
                         position: 'fixed',
                         bottom: '30px',
                         right: '30px',
-                        backgroundColor: '#2ea043',
+                        backgroundColor: 'var(--success-color)',
                         color: 'white',
                         border: 'none',
                         borderRadius: '50px',
@@ -280,17 +280,17 @@ const AdminDashboard = () => {
                         alignItems: 'center',
                         gap: '8px',
                         cursor: 'pointer',
-                        boxShadow: '0 4px 12px rgba(46, 160, 67, 0.4)',
+                        boxShadow: '0 4px 12px rgba(56, 142, 93, 0.4)',
                         transition: 'transform 0.2s ease, background-color 0.2s ease',
                         zIndex: 1000
                     }}
                     onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                        e.currentTarget.style.backgroundColor = '#3fb950';
+                        e.currentTarget.style.backgroundColor = 'var(--accent-color)';
                     }}
                     onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                        e.currentTarget.style.backgroundColor = '#2ea043';
+                        e.currentTarget.style.backgroundColor = 'var(--success-color)';
                     }}
                 >
                     <Trash2 size={20} /> DB FLUSH
