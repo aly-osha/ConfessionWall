@@ -100,16 +100,16 @@ const AdminDashboard = () => {
 
     return (
         <div className="container" style={{ marginTop: '40px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
                     <button onClick={() => navigate('/')} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <ArrowLeft size={16} /> Exit
                     </button>
-                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger-color)' }}>
+                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger-color)', margin: 0, whiteSpace: 'nowrap' }}>
                         <ShieldAlert size={24} /> {user?.role === 'moderator' ? 'Moderator Dashboard' : 'Security Dashboard'}
                     </h2>
                 </div>
-                <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
                     <NotificationBell />
                     <button onClick={fetchData} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <RefreshCw size={16} /> Refresh
