@@ -203,13 +203,13 @@ const SinglePost = () => {
                             onClick={() => handleVote('upvote')}
                             style={{ background: 'none', color: post.upvotes.includes(user._id) ? 'var(--accent-color)' : 'inherit', padding: 0 }}
                         >
-                            ▲ {post.upvotes.length}
+                            👍{post.upvotes.length}
                         </button>
                         <button
                             onClick={() => handleVote('downvote')}
                             style={{ background: 'none', color: post.downvotes.includes(user._id) ? 'var(--danger-color)' : 'inherit', padding: 0 }}
                         >
-                            ▼ {post.downvotes.length}
+                            👎{post.downvotes.length}
                         </button>
                     </div>
 

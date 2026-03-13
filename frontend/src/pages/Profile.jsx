@@ -286,8 +286,8 @@ const Profile = () => {
                             )}
 
                             <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                                <span>▲ {post.upvotes.length}</span>
-                                <span>▼ {post.downvotes.length}</span>
+                                <span>👍{post.upvotes.length}</span>
+                                <span>👎{post.downvotes.length}</span>
                                 <Link to={`/post/${post._id}`} style={{ color: 'inherit', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <MessageCircle size={14} /> {post.commentCount} Comments
                                 </Link>

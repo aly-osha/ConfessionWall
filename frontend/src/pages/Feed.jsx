@@ -201,10 +201,10 @@ const Feed = () => {
 
                             <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)' }}>
                                 <button onClick={() => handleVote(post._id, 'upvote')} style={{ background: 'none', color: post.upvotes.includes(user._id) ? 'var(--accent-color)' : 'inherit', padding: 0 }}>
-                                    ▲ {post.upvotes.length}
+                                    👍{post.upvotes.length}
                                 </button>
                                 <button onClick={() => handleVote(post._id, 'downvote')} style={{ background: 'none', color: post.downvotes.includes(user._id) ? 'var(--danger-color)' : 'inherit', padding: 0 }}>
-                                    ▼ {post.downvotes.length}
+                                    👎{post.downvotes.length}
                                 </button>
                                 <Link to={`/post/${post._id}`} style={{ color: 'inherit' }}>
                                     💬 {post.commentCount} Comments
