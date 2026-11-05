@@ -1,0 +1,524 @@
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import {
+  Shield,
+  ShieldAlert,
+  ArrowLeft,
+  RefreshCw,
+  Flag,
+  Users,
+  SlidersHorizontal,
+  Database,
+  EyeOff,
+  Eye,
+  Trash2,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Ban,
+  UserX,
+  UserCheck,
+  Search,
+  Filter
+} from "lucide-react";
+import useAuthStore from "../store/authStore";
+import api from "../services/api";
+import { showAlert, showConfirm } from "../store/dialogStore";
+import NotificationBell from "../components/NotificationBell";
+const TABS = [
+  { id: "reports", label: "Report Queue", icon: Flag },
+  { id: "users", label: "User Management", icon: Users },
+  { id: "filters", label: "Moderation Filters", icon: SlidersHorizontal },
+  { id: "maintenance", label: "DB Maintenance", icon: Database }
+];
+const REPORT_ACTIONS = {
+  dismiss: { label: "Dismiss", icon: XCircle, style: { backgroundColor: "var(--bg-surface-hover)", color: "var(--text-primary)" } },
+  warn: { label: "Warn", icon: AlertTriangle, style: { backgroundColor: "var(--accent-color)", color: "#fff" } },
+  ban: { label: "Ban", icon: Ban, style: { backgroundColor: "var(--danger-color)", color: "#fff" } }
+};
+const STATUS_COLORS = {
+  active: { bg: "rgba(46,160,67,0.15)", color: "var(--success-color)" },
+  warned: { bg: "rgba(232,168,23,0.15)", color: "var(--accent-color)" },
+  temp_banned: { bg: "rgba(226,54,54,0.15)", color: "var(--danger-color)" },
+  perm_banned: { bg: "rgba(196,65,88,0.2)", color: "var(--danger-color)" }
+};
+const AdminDashboard = () => {
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("reports");
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [autoHiddenCount, setAutoHiddenCount] = useState(0);
+  const [bannedCount, setBannedCount] = useState(0);
+  const [filters, setFilters] = useState({
+    autoHideThreshold: 3,
+    keywordFilterEnabled: true,
+    bannedKeywords: ["spam", "hate", "violence"],
+    autoWarnOnReportCount: 3,
+    hideNewUserReports: false
+  });
+  const [newKeyword, setNewKeyword] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  useEffect(() => {
+    if (!user || user.role !== "admin" && user.role !== "moderator") {
+      navigate("/");
+      return;
+    }
+    fetchDashboardData();
+  }, [user, navigate]);
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [reportsRes, usersRes, hiddenRes] = await Promise.allSettled([
+        api.get("/reports"),
+        api.get("/admin/users"),
+        api.get("/admin/stats/auto-hidden").catch(() => ({ data: { count: 0 } }))
+      ]);
+      if (reportsRes.status === "fulfilled") setReports(reportsRes.value.data);
+      if (usersRes.status === "fulfilled") {
+        const allUsers = usersRes.value.data;
+        setUsers(allUsers);
+        setBannedCount(allUsers.filter((u) => u.status === "temp_banned" || u.status === "perm_banned").length);
+      }
+      if (hiddenRes.status === "fulfilled") setAutoHiddenCount(hiddenRes.value.data.count || 0);
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+      showAlert("Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (user && (user.role === "admin" || user.role === "moderator")) {
+      fetchDashboardData();
+    }
+  }, [user, fetchDashboardData]);
+  const handleReportAction = async (reportId, action) => {
+    const actionLabel = REPORT_ACTIONS[action]?.label || action;
+    if (action !== "dismiss") {
+      const confirmed = await showConfirm(
+        `Are you sure you want to ${actionLabel.toLowerCase()} the reported user? ${action === "ban" ? "This will permanently ban them." : ""}`
+      );
+      if (!confirmed) return;
+    }
+    setActionLoading(`${reportId}-${action}`);
+    try {
+      await api.put(`/reports/${reportId}/review`, { action });
+      setReports((prev) => prev.filter((r) => r._id !== reportId));
+      showAlert(`Report ${action === "dismiss" ? "dismissed" : "resolved: user " + actionLabel.toLowerCase() + "ed"}`);
+      fetchDashboardData();
+    } catch (err) {
+      showAlert(err.response?.data?.message || `Failed to ${actionLabel.toLowerCase()} report`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+  const handleUserStatusChange = async (userId, newStatus) => {
+    try {
+      await api.put(`/admin/users/${userId}/status`, { status: newStatus });
+      setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, status: newStatus } : u));
+      showAlert(`User status updated to "${newStatus.replace("_", " ")}"`);
+    } catch (err) {
+      showAlert(err.response?.data?.message || "Failed to update user status");
+    }
+  };
+  const handleUserRoleChange = async (userId, newRole) => {
+    try {
+      await api.put(`/admin/users/${userId}/role`, { role: newRole });
+      setUsers((prev) => prev.map((u) => u._id === userId ? { ...u, role: newRole } : u));
+      showAlert(`User role changed to "${newRole}"`);
+    } catch (err) {
+      showAlert(err.response?.data?.message || "Failed to update user role");
+    }
+  };
+  const handleDeleteUser = async (userId) => {
+    const confirmed = await showConfirm(
+      "Permanently delete this user and all their content? This cannot be undone."
+    );
+    if (!confirmed) return;
+    try {
+      await api.delete(`/admin/users/${userId}`);
+      setUsers((prev) => prev.filter((u) => u._id !== userId));
+      showAlert("User deleted successfully");
+    } catch (err) {
+      showAlert(err.response?.data?.message || "Failed to delete user");
+    }
+  };
+  const handleSaveFilters = async () => {
+    try {
+      await api.put("/admin/moderation/filters", filters);
+      showAlert("Moderation filters saved");
+    } catch (err) {
+      showAlert(err.response?.data?.message || "Failed to save filters");
+    }
+  };
+  const handleAddKeyword = () => {
+    const kw = newKeyword.trim().toLowerCase();
+    if (!kw) return;
+    if (filters.bannedKeywords.includes(kw)) {
+      showAlert("Keyword already exists");
+      return;
+    }
+    setFilters((prev) => ({ ...prev, bannedKeywords: [...prev.bannedKeywords, kw] }));
+    setNewKeyword("");
+  };
+  const handleRemoveKeyword = (keyword) => {
+    setFilters((prev) => ({
+      ...prev,
+      bannedKeywords: prev.bannedKeywords.filter((k) => k !== keyword)
+    }));
+  };
+  const handleFlushDb = async () => {
+    const confirmed = await showConfirm(
+      "Flush database? This permanently deletes hidden posts/comments, read notifications, and reviewed reports. This cannot be undone."
+    );
+    if (!confirmed) return;
+    try {
+      const { data } = await api.delete("/admin/flush-db");
+      showAlert(
+        `Database flushed. Deleted: ${data.deletedCounts.posts} posts, ${data.deletedCounts.comments} comments, ${data.deletedCounts.notifications} notifications, ${data.deletedCounts.reports} reports.`
+      );
+      fetchDashboardData();
+    } catch (err) {
+      showAlert(err.response?.data?.message || "Failed to flush database");
+    }
+  };
+  const [viewRole, setViewRole] = useState(user?.role || "admin");
+  const isAdminView = viewRole === "admin";
+  const metrics = [
+    { label: "Pending Reports", value: loading ? "\u2026" : reports.length, icon: Flag, color: "var(--accent-color)", bg: "rgba(246,81,42,0.08)" },
+    { label: "Auto-Hidden", value: loading ? "\u2026" : autoHiddenCount, icon: EyeOff, color: "var(--text-muted)", bg: "rgba(102,102,102,0.08)" },
+    { label: "Active Users", value: loading ? "\u2026" : users.filter((u) => u.status === "active").length, icon: Users, color: "var(--success-color)", bg: "rgba(46,160,67,0.08)" },
+    { label: "Banned", value: loading ? "\u2026" : bannedCount, icon: Ban, color: "var(--danger-color)", bg: "rgba(226,54,54,0.08)" }
+  ];
+  const filteredUsers = searchQuery.trim() ? users.filter((u) => u.username.toLowerCase().includes(searchQuery.toLowerCase())) : users;
+  if (!user || user.role !== "admin" && user.role !== "moderator") return null;
+  return /* @__PURE__ */ React.createElement("div", { className: "container", style: { marginTop: "30px", maxWidth: "1100px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px", flexWrap: "wrap", gap: "15px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "15px", flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("button", { onClick: () => navigate("/"), className: "btn-secondary", style: { display: "flex", alignItems: "center", gap: "5px" } }, /* @__PURE__ */ React.createElement(ArrowLeft, { size: 16 }), " Back"), /* @__PURE__ */ React.createElement("h2", { style: { display: "flex", alignItems: "center", gap: "10px", margin: 0, fontSize: "1.6rem" } }, /* @__PURE__ */ React.createElement(ShieldAlert, { size: 24, color: "var(--danger-color)" }), " Admin Dashboard"), /* @__PURE__ */ React.createElement("div", { style: {
+    display: "inline-flex",
+    borderRadius: "50px",
+    overflow: "hidden",
+    border: "2px solid var(--border-color)",
+    backgroundColor: "var(--bg-surface)"
+  } }, ["admin", "moderator"].map((role) => /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      key: role,
+      onClick: () => setViewRole(role),
+      style: {
+        padding: "6px 18px",
+        fontSize: "0.85rem",
+        fontWeight: "bold",
+        border: "none",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "5px",
+        backgroundColor: viewRole === role ? role === "admin" ? "var(--danger-color)" : "var(--accent-color)" : "transparent",
+        color: viewRole === role ? "#fff" : "var(--text-muted)",
+        transition: "all 0.2s"
+      }
+    },
+    role === "admin" ? /* @__PURE__ */ React.createElement(Shield, { size: 13 }) : /* @__PURE__ */ React.createElement(Shield, { size: 13 }),
+    role.charAt(0).toUpperCase() + role.slice(1)
+  )))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, /* @__PURE__ */ React.createElement(NotificationBell, null), /* @__PURE__ */ React.createElement("button", { onClick: fetchDashboardData, className: "btn-secondary", style: { display: "flex", alignItems: "center", gap: "5px" } }, /* @__PURE__ */ React.createElement(RefreshCw, { size: 16 }), " Refresh"))), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "15px", marginBottom: "25px" } }, metrics.map((m) => {
+    const Icon = m.icon;
+    return /* @__PURE__ */ React.createElement("div", { key: m.label, className: "card", style: { padding: "20px", display: "flex", alignItems: "center", gap: "15px", marginBottom: 0 } }, /* @__PURE__ */ React.createElement("div", { style: {
+      width: "48px",
+      height: "48px",
+      borderRadius: "14px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: m.bg,
+      flexShrink: 0
+    } }, /* @__PURE__ */ React.createElement(Icon, { size: 22, color: m.color })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: "1.5rem", fontWeight: "bold", lineHeight: 1.2 } }, m.value), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "0.82rem", color: "var(--text-muted)" } }, m.label)));
+  })), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "25px", flexWrap: "wrap", borderBottom: "2px solid var(--border-color)", paddingBottom: "10px" } }, TABS.map((tab) => {
+    const Icon = tab.icon;
+    const isActive = activeTab === tab.id;
+    return /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: tab.id,
+        onClick: () => setActiveTab(tab.id),
+        style: {
+          padding: "10px 20px",
+          borderRadius: "50px",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          fontSize: "0.9rem",
+          fontWeight: isActive ? "bold" : "500",
+          backgroundColor: isActive ? "var(--text-primary)" : "var(--bg-surface)",
+          color: isActive ? "var(--bg-color)" : "var(--text-secondary)",
+          transition: "all 0.2s",
+          boxShadow: isActive ? "0 2px 10px rgba(0,0,0,0.1)" : "none"
+        }
+      },
+      /* @__PURE__ */ React.createElement(Icon, { size: 15 }),
+      " ",
+      tab.label,
+      tab.id === "reports" && reports.length > 0 && /* @__PURE__ */ React.createElement("span", { style: {
+        backgroundColor: "var(--danger-color)",
+        color: "#fff",
+        borderRadius: "50%",
+        width: "20px",
+        height: "20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "0.72rem",
+        fontWeight: "bold"
+      } }, reports.length)
+    );
+  })), loading ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "60px 0", color: "var(--text-muted)" } }, /* @__PURE__ */ React.createElement(RefreshCw, { size: 32, style: { animation: "spin 1s linear infinite", marginBottom: "15px" } }), /* @__PURE__ */ React.createElement("p", null, "Loading dashboard data\u2026")) : /* @__PURE__ */ React.createElement(React.Fragment, null, activeTab === "reports" && /* @__PURE__ */ React.createElement("div", null, reports.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "card", style: { textAlign: "center", padding: "50px 20px" } }, /* @__PURE__ */ React.createElement(CheckCircle, { size: 48, color: "var(--success-color)", style: { marginBottom: "15px" } }), /* @__PURE__ */ React.createElement("h3", { style: { marginBottom: "8px" } }, "All Clear!"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-muted)" } }, "No pending reports. The wall is peaceful.")) : /* @__PURE__ */ React.createElement("div", { className: "card", style: { padding: 0, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", textAlign: "left" } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { backgroundColor: "var(--bg-surface-hover)", borderBottom: "1px solid var(--border-color)" } }, /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Type"), /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Reported By"), /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Reason"), /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Content Preview"), /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Author"), /* @__PURE__ */ React.createElement("th", { style: { ...thStyle, textAlign: "center" } }, "Actions"))), /* @__PURE__ */ React.createElement("tbody", null, reports.map((report) => {
+    const targetAuthor = report.targetId?.author;
+    const isBanned = targetAuthor && (targetAuthor.status === "temp_banned" || targetAuthor.status === "perm_banned");
+    return /* @__PURE__ */ React.createElement("tr", { key: report._id, style: { borderBottom: "1px solid var(--border-color)", backgroundColor: isBanned ? "rgba(226,54,54,0.03)" : "transparent" } }, /* @__PURE__ */ React.createElement("td", { style: tdStyle }, /* @__PURE__ */ React.createElement("span", { style: badgeStyle("var(--accent-color)", "#fff") }, report.type.toUpperCase())), /* @__PURE__ */ React.createElement("td", { style: tdStyle }, /* @__PURE__ */ React.createElement(Link, { to: `/profile/${report.reporter?.username}`, style: { fontWeight: 500 } }, report.reporter?.username || "Unknown")), /* @__PURE__ */ React.createElement("td", { style: { ...tdStyle, maxWidth: "180px" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: "0.9rem" } }, report.reason)), /* @__PURE__ */ React.createElement("td", { style: { ...tdStyle, maxWidth: "200px" } }, /* @__PURE__ */ React.createElement("span", { style: {
+      fontSize: "0.85rem",
+      fontStyle: "italic",
+      color: "var(--text-muted)",
+      display: "block",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    } }, '"', report.targetId?.content?.substring(0, 80) || "[Deleted]", report.targetId?.content?.length > 80 ? "\u2026" : "", '"')), /* @__PURE__ */ React.createElement("td", { style: tdStyle }, targetAuthor && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(Link, { to: `/profile/${targetAuthor.username}`, style: { fontWeight: 500 } }, targetAuthor.username), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" } }, report.targetId?.isHidden ? /* @__PURE__ */ React.createElement(EyeOff, { size: 11 }) : /* @__PURE__ */ React.createElement(Eye, { size: 11 }), "Warnings: ", /* @__PURE__ */ React.createElement("span", { style: { color: report.targetId?.author?.warningCount > 0 ? "var(--danger-color)" : "inherit", fontWeight: "bold" } }, targetAuthor.warningCount || 0)))), /* @__PURE__ */ React.createElement("td", { style: { ...tdStyle, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" } }, Object.entries(REPORT_ACTIONS).map(([action, cfg]) => {
+      const ActionIcon = cfg.icon;
+      const isDisabled = actionLoading === `${report._id}-${action}` || action === "ban" && !isAdminView;
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: action,
+          onClick: () => handleReportAction(report._id, action),
+          disabled: isDisabled,
+          title: action === "ban" && !isAdminView ? "Admin only" : cfg.label,
+          style: {
+            padding: "6px 12px",
+            borderRadius: "6px",
+            border: "none",
+            cursor: isDisabled ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            opacity: isDisabled ? 0.5 : 1,
+            transition: "all 0.15s",
+            ...cfg.style
+          }
+        },
+        /* @__PURE__ */ React.createElement(ActionIcon, { size: 12 }),
+        " ",
+        cfg.label
+      );
+    }))));
+  }))))), activeTab === "users" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: "15px", position: "relative", maxWidth: "350px" } }, /* @__PURE__ */ React.createElement(Search, { size: 16, style: { position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" } }), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      placeholder: "Search users\u2026",
+      value: searchQuery,
+      onChange: (e) => setSearchQuery(e.target.value),
+      style: { paddingLeft: "40px" }
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "card", style: { padding: 0, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", textAlign: "left" } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { backgroundColor: "var(--bg-surface-hover)", borderBottom: "1px solid var(--border-color)" } }, /* @__PURE__ */ React.createElement("th", { style: thStyle }, "User"), /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Role"), /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Warnings"), /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Status"), isAdminView && /* @__PURE__ */ React.createElement("th", { style: thStyle }, "Change Role"), /* @__PURE__ */ React.createElement("th", { style: { ...thStyle, textAlign: "center" } }, "Actions"))), /* @__PURE__ */ React.createElement("tbody", null, filteredUsers.length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 6, style: { ...tdStyle, textAlign: "center", padding: "40px", color: "var(--text-muted)" } }, /* @__PURE__ */ React.createElement(Users, { size: 32, style: { marginBottom: "10px", opacity: 0.4 } }), /* @__PURE__ */ React.createElement("p", null, "No users found."))) : filteredUsers.map((u) => {
+    const statusCfg = STATUS_COLORS[u.status] || STATUS_COLORS.active;
+    const isSelf = u._id === user._id;
+    const canModerate = !isSelf && !(user.role === "moderator" && u.role === "admin");
+    const roleOptions = [
+      { value: "user", label: "User" },
+      { value: "moderator", label: "Moderator" },
+      ...isAdminView ? [{ value: "admin", label: "Admin" }] : []
+    ];
+    return /* @__PURE__ */ React.createElement("tr", { key: u._id, style: { borderBottom: "1px solid var(--border-color)", backgroundColor: isSelf ? "rgba(246,81,42,0.03)" : "transparent" } }, /* @__PURE__ */ React.createElement("td", { style: tdStyle }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "10px" } }, /* @__PURE__ */ React.createElement("div", { style: {
+      width: "36px",
+      height: "36px",
+      borderRadius: "50%",
+      backgroundColor: "var(--bg-surface-hover)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontWeight: "bold",
+      fontSize: "0.9rem",
+      flexShrink: 0
+    } }, u.username.charAt(0).toUpperCase()), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Link, { to: `/profile/${u.username}`, style: { fontWeight: 500 } }, u.username), isSelf && /* @__PURE__ */ React.createElement("span", { style: { fontSize: "0.72rem", color: "var(--accent-color)", marginLeft: "6px", fontWeight: "bold" } }, "(YOU)")))), /* @__PURE__ */ React.createElement("td", { style: tdStyle }, /* @__PURE__ */ React.createElement("span", { style: badgeStyle(
+      u.role === "admin" ? "var(--danger-color)" : u.role === "moderator" ? "var(--accent-color)" : "var(--text-muted)",
+      "#fff"
+    ) }, u.role.toUpperCase())), /* @__PURE__ */ React.createElement("td", { style: { ...tdStyle, color: u.warningCount > 0 ? "var(--danger-color)" : "inherit", fontWeight: u.warningCount > 0 ? "bold" : "normal" } }, u.warningCount || 0), /* @__PURE__ */ React.createElement("td", { style: tdStyle }, /* @__PURE__ */ React.createElement("span", { style: badgeStyle(statusCfg.bg, statusCfg.color) }, u.status.replace("_", " ").toUpperCase())), isAdminView && /* @__PURE__ */ React.createElement("td", { style: tdStyle }, u.role !== "admin" || isAdminView ? /* @__PURE__ */ React.createElement(
+      "select",
+      {
+        value: u.role,
+        onChange: (e) => handleUserRoleChange(u._id, e.target.value),
+        disabled: isSelf,
+        style: selectStyle
+      },
+      roleOptions.map((opt) => /* @__PURE__ */ React.createElement("option", { key: opt.value, value: opt.value }, opt.label))
+    ) : /* @__PURE__ */ React.createElement("span", { style: { fontSize: "0.85rem", color: "var(--text-muted)" } }, "\u2014")), /* @__PURE__ */ React.createElement("td", { style: { ...tdStyle, textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" } }, /* @__PURE__ */ React.createElement(
+      "select",
+      {
+        value: u.status,
+        onChange: (e) => handleUserStatusChange(u._id, e.target.value),
+        disabled: !canModerate,
+        style: { ...selectStyle, minWidth: "120px" }
+      },
+      /* @__PURE__ */ React.createElement("option", { value: "active" }, "Active"),
+      /* @__PURE__ */ React.createElement("option", { value: "warned" }, "Warned"),
+      /* @__PURE__ */ React.createElement("option", { value: "temp_banned" }, "Temp Ban"),
+      /* @__PURE__ */ React.createElement("option", { value: "perm_banned" }, "Perm Ban")
+    ), isAdminView && /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => handleDeleteUser(u._id),
+        disabled: isSelf,
+        title: isSelf ? "Cannot delete yourself" : "Delete User",
+        style: {
+          padding: "6px",
+          borderRadius: "6px",
+          border: "1px solid var(--danger-color)",
+          backgroundColor: "transparent",
+          color: "var(--danger-color)",
+          cursor: isSelf ? "not-allowed" : "pointer",
+          display: "flex",
+          alignItems: "center",
+          opacity: isSelf ? 0.4 : 1
+        }
+      },
+      /* @__PURE__ */ React.createElement(Trash2, { size: 14 })
+    ))));
+  }))))), activeTab === "filters" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "card", style: { marginBottom: "20px" } }, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px", fontSize: "1.2rem" } }, /* @__PURE__ */ React.createElement(Filter, { size: 18, color: "var(--accent-color)" }), " Auto-Moderation Settings"), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Auto-Hide Report Threshold"), /* @__PURE__ */ React.createElement("p", { style: descStyle }, "Content is automatically hidden after this many reports."), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      min: "1",
+      max: "20",
+      value: filters.autoHideThreshold,
+      onChange: (e) => setFilters((prev) => ({ ...prev, autoHideThreshold: parseInt(e.target.value) || 1 }))
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Auto-Warn Report Count"), /* @__PURE__ */ React.createElement("p", { style: descStyle }, "Users receive an automatic warning after this many reports."), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      min: "1",
+      max: "20",
+      value: filters.autoWarnOnReportCount,
+      onChange: (e) => setFilters((prev) => ({ ...prev, autoWarnOnReportCount: parseInt(e.target.value) || 1 }))
+    }
+  )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px", backgroundColor: "var(--bg-surface-hover)", borderRadius: "12px" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 600, fontSize: "0.9rem" } }, "Keyword Filter"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "0.8rem", color: "var(--text-muted)" } }, "Auto-hide posts containing banned keywords")), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setFilters((prev) => ({ ...prev, keywordFilterEnabled: !prev.keywordFilterEnabled })),
+      style: {
+        width: "48px",
+        height: "26px",
+        borderRadius: "50px",
+        border: "none",
+        cursor: "pointer",
+        backgroundColor: filters.keywordFilterEnabled ? "var(--success-color)" : "var(--border-color)",
+        position: "relative",
+        transition: "background-color 0.2s"
+      }
+    },
+    /* @__PURE__ */ React.createElement("span", { style: {
+      position: "absolute",
+      top: "3px",
+      left: filters.keywordFilterEnabled ? "25px" : "3px",
+      width: "20px",
+      height: "20px",
+      borderRadius: "50%",
+      backgroundColor: "#fff",
+      transition: "left 0.2s",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+    } })
+  )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px", backgroundColor: "var(--bg-surface-hover)", borderRadius: "12px" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 600, fontSize: "0.9rem" } }, "Hide New User Reports"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "0.8rem", color: "var(--text-muted)" } }, "Require manual review for reports on users < 7 days old")), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setFilters((prev) => ({ ...prev, hideNewUserReports: !prev.hideNewUserReports })),
+      style: {
+        width: "48px",
+        height: "26px",
+        borderRadius: "50px",
+        border: "none",
+        cursor: "pointer",
+        backgroundColor: filters.hideNewUserReports ? "var(--success-color)" : "var(--border-color)",
+        position: "relative",
+        transition: "background-color 0.2s"
+      }
+    },
+    /* @__PURE__ */ React.createElement("span", { style: {
+      position: "absolute",
+      top: "3px",
+      left: filters.hideNewUserReports ? "25px" : "3px",
+      width: "20px",
+      height: "20px",
+      borderRadius: "50%",
+      backgroundColor: "#fff",
+      transition: "left 0.2s",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+    } })
+  )))), /* @__PURE__ */ React.createElement("div", { className: "card", style: { marginBottom: "20px" } }, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "15px", fontSize: "1.2rem" } }, /* @__PURE__ */ React.createElement(Ban, { size: 18, color: "var(--danger-color)" }), " Banned Keywords"), /* @__PURE__ */ React.createElement("p", { style: { fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "15px" } }, "Posts containing these keywords will be automatically hidden and flagged for review."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "10px", marginBottom: "15px" } }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      placeholder: "Add a keyword\u2026",
+      value: newKeyword,
+      onChange: (e) => setNewKeyword(e.target.value),
+      onKeyDown: (e) => e.key === "Enter" && (e.preventDefault(), handleAddKeyword())
+    }
+  ), /* @__PURE__ */ React.createElement("button", { onClick: handleAddKeyword, className: "btn-primary" }, "Add Keyword")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px" } }, filters.bannedKeywords.length === 0 ? /* @__PURE__ */ React.createElement("span", { style: { color: "var(--text-muted)", fontSize: "0.9rem" } }, "No keywords configured.") : filters.bannedKeywords.map((kw) => /* @__PURE__ */ React.createElement("span", { key: kw, style: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "6px 14px",
+    borderRadius: "50px",
+    fontSize: "0.85rem",
+    backgroundColor: "rgba(226,54,54,0.1)",
+    color: "var(--danger-color)",
+    fontWeight: 500
+  } }, kw, /* @__PURE__ */ React.createElement("button", { onClick: () => handleRemoveKeyword(kw), style: { background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(XCircle, { size: 14 })))))), /* @__PURE__ */ React.createElement("button", { onClick: handleSaveFilters, className: "btn-primary", style: { width: "100%", padding: "14px" } }, "Save Filter Configuration")), activeTab === "maintenance" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "card", style: { marginBottom: "20px" } }, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px", fontSize: "1.2rem" } }, /* @__PURE__ */ React.createElement(Database, { size: 18, color: "var(--text-secondary)" }), " Database Overview"), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" } }, [
+    { label: "Total Users", value: users.length },
+    { label: "Pending Reports", value: reports.length },
+    { label: "Auto-Hidden Content", value: autoHiddenCount },
+    { label: "Active Bans", value: bannedCount }
+  ].map((stat) => /* @__PURE__ */ React.createElement("div", { key: stat.label, style: { padding: "15px", backgroundColor: "var(--bg-surface-hover)", borderRadius: "12px", textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: "1.4rem", fontWeight: "bold" } }, stat.value), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "0.78rem", color: "var(--text-muted)" } }, stat.label))))), /* @__PURE__ */ React.createElement("div", { className: "card", style: { marginBottom: "20px", borderLeft: "4px solid var(--danger-color)" } }, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", fontSize: "1.2rem" } }, /* @__PURE__ */ React.createElement(AlertTriangle, { size: 18, color: "var(--danger-color)" }), " Flush Database"), /* @__PURE__ */ React.createElement("p", { style: { fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: "20px" } }, "Permanently delete hidden posts and comments, read notifications, and reviewed/dismissed reports. This action ", /* @__PURE__ */ React.createElement("strong", null, "cannot be undone"), "."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "12px", flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: handleFlushDb,
+      style: {
+        padding: "12px 28px",
+        borderRadius: "12px",
+        border: "none",
+        cursor: "pointer",
+        backgroundColor: "var(--danger-color)",
+        color: "#fff",
+        fontWeight: "bold",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        fontSize: "0.95rem",
+        transition: "all 0.2s",
+        boxShadow: "0 4px 12px rgba(226,54,54,0.3)"
+      }
+    },
+    /* @__PURE__ */ React.createElement(Trash2, { size: 16 }),
+    " Flush Database"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "card", style: { borderLeft: "4px solid var(--accent-color)" } }, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", fontSize: "1.2rem" } }, /* @__PURE__ */ React.createElement(SlidersHorizontal, { size: 18, color: "var(--accent-color)" }), " Danger Zone"), /* @__PURE__ */ React.createElement("p", { style: { fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: "20px" } }, "Additional maintenance operations for database cleanup."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "12px", flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("button", { className: "btn-secondary", onClick: () => showAlert("Recalculating user reputation scores\u2026 (demo)") }, "Recalculate Reputation"), /* @__PURE__ */ React.createElement("button", { className: "btn-secondary", onClick: () => showAlert("Orphaned content scan complete. 0 items found. (demo)") }, "Scan Orphaned Content"), /* @__PURE__ */ React.createElement("button", { className: "btn-secondary", onClick: () => showAlert("Export queued. Download link will be sent via email. (demo)") }, "Export Database"))))), /* @__PURE__ */ React.createElement("style", null, `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`));
+};
+const thStyle = { padding: "14px 16px", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--text-muted)" };
+const tdStyle = { padding: "14px 16px", fontSize: "0.9rem", verticalAlign: "middle" };
+const selectStyle = { backgroundColor: "var(--bg-surface)", color: "var(--text-primary)", border: "1px solid var(--border-color)", padding: "6px 10px", borderRadius: "8px", fontSize: "0.85rem", cursor: "pointer" };
+const labelStyle = { display: "block", fontWeight: 600, fontSize: "0.9rem", marginBottom: "4px" };
+const descStyle = { fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "10px" };
+const badgeStyle = (bg, color) => ({
+  display: "inline-block",
+  padding: "3px 10px",
+  borderRadius: "50px",
+  fontSize: "0.72rem",
+  fontWeight: "bold",
+  letterSpacing: "0.02em",
+  backgroundColor: bg,
+  color
+});
+export default AdminDashboard;

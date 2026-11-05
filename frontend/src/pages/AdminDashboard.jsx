@@ -1,303 +1,758 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import {
+  Shield, ShieldAlert, ArrowLeft, RefreshCw, Flag, Users, SlidersHorizontal,
+  Database, EyeOff, Eye, Trash2, AlertTriangle, CheckCircle, XCircle,
+  Ban, UserX, UserCheck, Search, Filter
+} from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
-import { ShieldAlert, Trash2, ArrowLeft, RefreshCw, EyeOff, Eye } from 'lucide-react';
 import { showAlert, showConfirm } from '../store/dialogStore';
-import { useNavigate, Link } from 'react-router-dom';
 import NotificationBell from '../components/NotificationBell';
 
+const TABS = [
+  { id: 'reports', label: 'Report Queue', icon: Flag },
+  { id: 'users', label: 'User Management', icon: Users },
+  { id: 'filters', label: 'Moderation Filters', icon: SlidersHorizontal },
+  { id: 'maintenance', label: 'DB Maintenance', icon: Database },
+];
+
+const REPORT_ACTIONS = {
+  dismiss: { label: 'Dismiss', icon: XCircle, style: { backgroundColor: 'var(--bg-surface-hover)', color: 'var(--text-primary)' } },
+  warn: { label: 'Warn', icon: AlertTriangle, style: { backgroundColor: 'var(--accent-color)', color: '#fff' } },
+  ban: { label: 'Ban', icon: Ban, style: { backgroundColor: 'var(--danger-color)', color: '#fff' } },
+};
+
+const STATUS_COLORS = {
+  active: { bg: 'rgba(46,160,67,0.15)', color: 'var(--success-color)' },
+  warned: { bg: 'rgba(232,168,23,0.15)', color: 'var(--accent-color)' },
+  temp_banned: { bg: 'rgba(226,54,54,0.15)', color: 'var(--danger-color)' },
+  perm_banned: { bg: 'rgba(196,65,88,0.2)', color: 'var(--danger-color)' },
+};
+
 const AdminDashboard = () => {
-    const { user } = useAuthStore();
-    const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
 
-    const [reports, setReports] = useState([]);
-    const [users, setUsers] = useState([]);
-    const [activeTab, setActiveTab] = useState('reports');
-    const [loading, setLoading] = useState(true);
+  // --- State ---
+  const [activeTab, setActiveTab] = useState('reports');
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
 
-    useEffect(() => {
-        if (!user || (user.role !== 'admin' && user.role !== 'moderator')) {
-            navigate('/');
-            return;
-        }
-        fetchData();
-    }, [user, navigate, activeTab]);
+  const [reports, setReports] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [autoHiddenCount, setAutoHiddenCount] = useState(0);
+  const [bannedCount, setBannedCount] = useState(0);
 
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            if (activeTab === 'reports') {
-                const { data } = await api.get('/reports');
-                setReports(data);
-            } else {
-                const { data } = await api.get('/admin/users');
-                setUsers(data);
-            }
-        } catch (err) {
-            console.error(err);
-            showAlert('Failed to fetch admin data');
-        } finally {
-            setLoading(false);
-        }
-    };
+  const [filters, setFilters] = useState({
+    autoHideThreshold: 3,
+    keywordFilterEnabled: true,
+    bannedKeywords: ['spam', 'hate', 'violence'],
+    autoWarnOnReportCount: 3,
+    hideNewUserReports: false,
+  });
+  const [newKeyword, setNewKeyword] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-    const handleReviewReport = async (reportId, action) => {
-        try {
-            await api.put(`/reports/${reportId}/review`, { action });
-            // Remove the reviewed report from the pending list
-            setReports(reports.filter(r => r._id !== reportId));
-        } catch (err) {
-            showAlert(err.response?.data?.message || 'Failed to act on report');
-        }
-    };
+  // --- Auth guard ---
+  useEffect(() => {
+    if (!user || (user.role !== 'admin' && user.role !== 'moderator')) {
+      navigate('/');
+      return;
+    }
+    fetchDashboardData();
+  }, [user, navigate]);
 
-    const handleUserStatusChange = async (userId, newStatus) => {
-        try {
-            await api.put(`/admin/users/${userId}/status`, { status: newStatus });
-            // Update local state
-            setUsers(users.map(u => u._id === userId ? { ...u, status: newStatus } : u));
-        } catch (err) {
-            showAlert(err.response?.data?.message || 'Failed to update user status');
-        }
-    };
+  // --- Data fetching ---
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [reportsRes, usersRes, hiddenRes] = await Promise.allSettled([
+        api.get('/reports'),
+        api.get('/admin/users'),
+        api.get('/admin/stats/auto-hidden').catch(() => ({ data: { count: 0 } })),
+      ]);
 
-    const handleUserRoleChange = async (userId, newRole) => {
-        try {
-            await api.put(`/admin/users/${userId}/role`, { role: newRole });
-            // Update local state
-            setUsers(users.map(u => u._id === userId ? { ...u, role: newRole } : u));
-        } catch (err) {
-            showAlert(err.response?.data?.message || 'Failed to update user role');
-        }
-    };
+      if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.data);
+      if (usersRes.status === 'fulfilled') {
+        const allUsers = usersRes.value.data;
+        setUsers(allUsers);
+        setBannedCount(allUsers.filter(u => u.status === 'temp_banned' || u.status === 'perm_banned').length);
+      }
+      if (hiddenRes.status === 'fulfilled') setAutoHiddenCount(hiddenRes.value.data.count || 0);
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+      showAlert('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    const handleFlushDb = async () => {
-        const confirmed = await showConfirm('Are you sure you want to flush the database? This action will permanently delete hidden posts/comments, read notifications, and reviewed/dismissed reports and cannot be undone.');
-        if (confirmed) {
-            try {
-                const { data } = await api.delete('/admin/flush-db');
-                showAlert(`Database flushed! Deleted: ${data.deletedCounts.posts} posts, ${data.deletedCounts.comments} comments, ${data.deletedCounts.notifications} notifications, ${data.deletedCounts.reports} reports.`);
-                // Refresh data
-                fetchData();
-            } catch (err) {
-                showAlert(err.response?.data?.message || 'Failed to flush database');
-            }
-        }
-    };
+  useEffect(() => {
+    if (user && (user.role === 'admin' || user.role === 'moderator')) {
+      fetchDashboardData();
+    }
+  }, [user, fetchDashboardData]);
 
-    const handleDeleteUser = async (userId) => {
-        const confirmed = await showConfirm('Are you sure you want to permanently delete this user and all their content? This cannot be undone.');
-        if (confirmed) {
-            try {
-                await api.delete(`/admin/users/${userId}`);
-                setUsers(users.filter(u => u._id !== userId));
-                showAlert('User successfully deleted');
-            } catch (err) {
-                showAlert(err.response?.data?.message || 'Failed to delete user');
-            }
-        }
-    };
+  // --- Report actions ---
+  const handleReportAction = async (reportId, action) => {
+    const actionLabel = REPORT_ACTIONS[action]?.label || action;
+    if (action !== 'dismiss') {
+      const confirmed = await showConfirm(
+        `Are you sure you want to ${actionLabel.toLowerCase()} the reported user? ${action === 'ban' ? 'This will permanently ban them.' : ''}`
+      );
+      if (!confirmed) return;
+    }
 
-    return (
-        <div className="container" style={{ marginTop: '40px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-                    <button onClick={() => navigate('/')} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <ArrowLeft size={16} /> Exit
-                    </button>
-                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger-color)', margin: 0, whiteSpace: 'nowrap' }}>
-                        <ShieldAlert size={24} /> {user?.role === 'moderator' ? 'Moderator Dashboard' : 'Security Dashboard'}
-                    </h2>
-                </div>
-                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-                    <NotificationBell />
-                    <button onClick={fetchData} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <RefreshCw size={16} /> Refresh
-                    </button>
-                </div>
+    setActionLoading(`${reportId}-${action}`);
+    try {
+      await api.put(`/reports/${reportId}/review`, { action });
+      setReports(prev => prev.filter(r => r._id !== reportId));
+      showAlert(`Report ${action === 'dismiss' ? 'dismissed' : 'resolved: user ' + actionLabel.toLowerCase() + 'ed'}`);
+      fetchDashboardData();
+    } catch (err) {
+      showAlert(err.response?.data?.message || `Failed to ${actionLabel.toLowerCase()} report`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // --- User management ---
+  const handleUserStatusChange = async (userId, newStatus) => {
+    try {
+      await api.put(`/admin/users/${userId}/status`, { status: newStatus });
+      setUsers(prev => prev.map(u => (u._id === userId ? { ...u, status: newStatus } : u)));
+      showAlert(`User status updated to "${newStatus.replace('_', ' ')}"`);
+    } catch (err) {
+      showAlert(err.response?.data?.message || 'Failed to update user status');
+    }
+  };
+
+  const handleUserRoleChange = async (userId, newRole) => {
+    try {
+      await api.put(`/admin/users/${userId}/role`, { role: newRole });
+      setUsers(prev => prev.map(u => (u._id === userId ? { ...u, role: newRole } : u)));
+      showAlert(`User role changed to "${newRole}"`);
+    } catch (err) {
+      showAlert(err.response?.data?.message || 'Failed to update user role');
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    const confirmed = await showConfirm(
+      'Permanently delete this user and all their content? This cannot be undone.'
+    );
+    if (!confirmed) return;
+    try {
+      await api.delete(`/admin/users/${userId}`);
+      setUsers(prev => prev.filter(u => u._id !== userId));
+      showAlert('User deleted successfully');
+    } catch (err) {
+      showAlert(err.response?.data?.message || 'Failed to delete user');
+    }
+  };
+
+  // --- Filters ---
+  const handleSaveFilters = async () => {
+    try {
+      await api.put('/admin/moderation/filters', filters);
+      showAlert('Moderation filters saved');
+    } catch (err) {
+      showAlert(err.response?.data?.message || 'Failed to save filters');
+    }
+  };
+
+  const handleAddKeyword = () => {
+    const kw = newKeyword.trim().toLowerCase();
+    if (!kw) return;
+    if (filters.bannedKeywords.includes(kw)) {
+      showAlert('Keyword already exists');
+      return;
+    }
+    setFilters(prev => ({ ...prev, bannedKeywords: [...prev.bannedKeywords, kw] }));
+    setNewKeyword('');
+  };
+
+  const handleRemoveKeyword = (keyword) => {
+    setFilters(prev => ({
+      ...prev,
+      bannedKeywords: prev.bannedKeywords.filter(k => k !== keyword),
+    }));
+  };
+
+  // --- DB Maintenance ---
+  const handleFlushDb = async () => {
+    const confirmed = await showConfirm(
+      'Flush database? This permanently deletes hidden posts/comments, read notifications, and reviewed reports. This cannot be undone.'
+    );
+    if (!confirmed) return;
+    try {
+      const { data } = await api.delete('/admin/flush-db');
+      showAlert(
+        `Database flushed. Deleted: ${data.deletedCounts.posts} posts, ${data.deletedCounts.comments} comments, ${data.deletedCounts.notifications} notifications, ${data.deletedCounts.reports} reports.`
+      );
+      fetchDashboardData();
+    } catch (err) {
+      showAlert(err.response?.data?.message || 'Failed to flush database');
+    }
+  };
+
+  // --- Role switcher (view as admin/moderator for preview) ---
+  const [viewRole, setViewRole] = useState(user?.role || 'admin');
+  const isAdminView = viewRole === 'admin';
+
+  // --- Derived ---
+  const metrics = [
+    { label: 'Pending Reports', value: loading ? '…' : reports.length, icon: Flag, color: 'var(--accent-color)', bg: 'rgba(246,81,42,0.08)' },
+    { label: 'Auto-Hidden', value: loading ? '…' : autoHiddenCount, icon: EyeOff, color: 'var(--text-muted)', bg: 'rgba(102,102,102,0.08)' },
+    { label: 'Active Users', value: loading ? '…' : users.filter(u => u.status === 'active').length, icon: Users, color: 'var(--success-color)', bg: 'rgba(46,160,67,0.08)' },
+    { label: 'Banned', value: loading ? '…' : bannedCount, icon: Ban, color: 'var(--danger-color)', bg: 'rgba(226,54,54,0.08)' },
+  ];
+
+  const filteredUsers = searchQuery.trim()
+    ? users.filter(u => u.username.toLowerCase().includes(searchQuery.toLowerCase()))
+    : users;
+
+  // --- Guard ---
+  if (!user || (user.role !== 'admin' && user.role !== 'moderator')) return null;
+
+  return (
+    <div className="container" style={{ marginTop: '30px', maxWidth: '1100px' }}>
+      {/* ===== Header ===== */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', flexWrap: 'wrap', gap: '15px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+          <button onClick={() => navigate('/')} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <ArrowLeft size={16} /> Back
+          </button>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.6rem' }}>
+            <ShieldAlert size={24} color="var(--danger-color)" /> Admin Dashboard
+          </h2>
+
+          {/* Role Switcher */}
+          <div style={{
+            display: 'inline-flex', borderRadius: '50px', overflow: 'hidden',
+            border: '2px solid var(--border-color)', backgroundColor: 'var(--bg-surface)'
+          }}>
+            {['admin', 'moderator'].map(role => (
+              <button
+                key={role}
+                onClick={() => setViewRole(role)}
+                style={{
+                  padding: '6px 18px', fontSize: '0.85rem', fontWeight: 'bold', border: 'none',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                  backgroundColor: viewRole === role ? (role === 'admin' ? 'var(--danger-color)' : 'var(--accent-color)') : 'transparent',
+                  color: viewRole === role ? '#fff' : 'var(--text-muted)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {role === 'admin' ? <Shield size={13} /> : <Shield size={13} />}
+                {role.charAt(0).toUpperCase() + role.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <NotificationBell />
+          <button onClick={fetchDashboardData} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* ===== Metric Cards ===== */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '25px' }}>
+        {metrics.map(m => {
+          const Icon = m.icon;
+          return (
+            <div key={m.label} className="card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '15px', marginBottom: 0 }}>
+              <div style={{
+                width: '48px', height: '48px', borderRadius: '14px', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', backgroundColor: m.bg, flexShrink: 0
+              }}>
+                <Icon size={22} color={m.color} />
+              </div>
+              <div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', lineHeight: 1.2 }}>{m.value}</div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{m.label}</div>
+              </div>
             </div>
+          );
+        })}
+      </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
-                <button
-                    className={activeTab === 'reports' ? 'btn-primary' : 'btn-secondary'}
-                    onClick={() => setActiveTab('reports')}
-                >
-                    Pending Reports ({activeTab === 'reports' && !loading ? reports.length : '...'})
-                </button>
-                <button
-                    className={activeTab === 'users' ? 'btn-primary' : 'btn-secondary'}
-                    onClick={() => setActiveTab('users')}
-                >
-                    User Management
-                </button>
-            </div>
+      {/* ===== Tab Bar ===== */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '25px', flexWrap: 'wrap', borderBottom: '2px solid var(--border-color)', paddingBottom: '10px' }}>
+        {TABS.map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '10px 20px', borderRadius: '50px', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '8px',
+                fontSize: '0.9rem', fontWeight: isActive ? 'bold' : '500',
+                backgroundColor: isActive ? 'var(--text-primary)' : 'var(--bg-surface)',
+                color: isActive ? 'var(--bg-color)' : 'var(--text-secondary)',
+                transition: 'all 0.2s',
+                boxShadow: isActive ? '0 2px 10px rgba(0,0,0,0.1)' : 'none',
+              }}
+            >
+              <Icon size={15} /> {tab.label}
+              {tab.id === 'reports' && reports.length > 0 && (
+                <span style={{
+                  backgroundColor: 'var(--danger-color)', color: '#fff', borderRadius: '50%',
+                  width: '20px', height: '20px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontSize: '0.72rem', fontWeight: 'bold'
+                }}>
+                  {reports.length}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-            {loading ? (
-                <div style={{ textAlign: 'center', marginTop: '50px', color: 'var(--text-muted)' }}>Loading records...</div>
-            ) : activeTab === 'reports' ? (
-                <div>
-                    {reports.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: 'var(--success-color)' }}>No pending reports. The wall is peaceful.</p>
-                    ) : (
-                        reports.map(report => (
-                            <div key={report._id} className="card" style={{ borderLeft: '4px solid var(--danger-color)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                                    <div>
-                                        <span style={{ backgroundColor: 'var(--bg-surface-hover)', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', marginRight: '10px' }}>
-                                            {report.type.toUpperCase()}
-                                        </span>
-                                        <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                            Reported by: <Link to={`/profile/${report.reporter.username}`}>{report.reporter.username}</Link>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div style={{ backgroundColor: 'var(--bg-surface-hover)', padding: '15px', borderRadius: '6px', marginBottom: '15px' }}>
-                                    <p style={{ fontWeight: 'bold', marginBottom: '5px', color: 'var(--danger-color)' }}>Reason: {report.reason}</p>
-                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Target Content:</p>
-                                    <p style={{ fontStyle: 'italic', borderLeft: '2px solid var(--border-color)', paddingLeft: '10px', color: 'var(--text-primary)' }}>
-                                        "{report.targetId?.content || '[Content Deleted]'}"
-                                    </p>
-                                    {report.targetId && (
-                                        <div style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                            <span style={{ marginRight: '15px' }}>Author: {report.targetId.author?.username}</span>
-                                            <span style={{ marginRight: '15px' }}>Warnings: <span style={{ color: 'var(--danger-color)' }}>{report.targetId.author?.warningCount}</span></span>
-                                            <span>Hidden Status: {report.targetId.isHidden ? <EyeOff size={14} style={{ verticalAlign: 'middle' }} /> : <Eye size={14} style={{ verticalAlign: 'middle' }} />} {report.targetId.isHidden ? 'Yes' : 'No'}</span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <button onClick={() => handleReviewReport(report._id, 'dismiss')} className="btn-secondary">
-                                        Dismiss (Ignore)
-                                    </button>
-                                    <button onClick={() => handleReviewReport(report._id, 'warn')} className="btn-primary" style={{ backgroundColor: 'var(--accent-color)', color: 'var(--bg-color)' }}>
-                                        Warn User & Delete Content
-                                    </button>
-                                    {user.role === 'admin' && (
-                                        <button onClick={() => handleReviewReport(report._id, 'ban')} className="btn-danger" style={{ backgroundColor: 'var(--danger-color)', color: 'white' }}>
-                                            Ban User & Delete Content
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))
-                    )}
+      {/* ===== Tab Content ===== */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
+          <RefreshCw size={32} style={{ animation: 'spin 1s linear infinite', marginBottom: '15px' }} />
+          <p>Loading dashboard data…</p>
+        </div>
+      ) : (
+        <>
+          {/* --- Report Queue --- */}
+          {activeTab === 'reports' && (
+            <div>
+              {reports.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: '50px 20px' }}>
+                  <CheckCircle size={48} color="var(--success-color)" style={{ marginBottom: '15px' }} />
+                  <h3 style={{ marginBottom: '8px' }}>All Clear!</h3>
+                  <p style={{ color: 'var(--text-muted)' }}>No pending reports. The wall is peaceful.</p>
                 </div>
-            ) : (
+              ) : (
                 <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead>
-                            <tr style={{ backgroundColor: 'var(--bg-surface-hover)', borderBottom: '1px solid var(--border-color)' }}>
-                                <th style={{ padding: '15px' }}>Username</th>
-                                <th style={{ padding: '15px' }}>Role</th>
-                                <th style={{ padding: '15px' }}>Warnings</th>
-                                <th style={{ padding: '15px' }}>Status</th>
-                                <th style={{ padding: '15px' }}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {users.map(u => (
-                                <tr key={u._id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                    <td style={{ padding: '15px' }}><Link to={`/profile/${u.username}`}>{u.username}</Link></td>
-                                    <td style={{ padding: '15px' }}>
-                                        {user.role === 'admin' && u.role !== 'admin' ? (
-                                            <select
-                                                value={u.role}
-                                                onChange={(e) => handleUserRoleChange(u._id, e.target.value)}
-                                                style={{
-                                                    backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)',
-                                                    border: '1px solid var(--border-color)', padding: '5px', borderRadius: '4px'
-                                                }}
-                                            >
-                                                <option value="user">User</option>
-                                                <option value="moderator">Moderator</option>
-                                            </select>
-                                        ) : (
-                                            u.role
-                                        )}
-                                    </td>
-                                    <td style={{ padding: '15px', color: u.warningCount > 0 ? 'var(--danger-color)' : 'inherit' }}>{u.warningCount}</td>
-                                    <td style={{ padding: '15px' }}>
-                                        <span style={{
-                                            padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem',
-                                            backgroundColor: u.status === 'active' ? 'rgba(56, 142, 93, 0.2)' :
-                                                u.status === 'warned' ? 'rgba(232, 168, 23, 0.2)' : 'rgba(196, 65, 88, 0.2)',
-                                            color: u.status === 'active' ? 'var(--success-color)' :
-                                                u.status === 'warned' ? 'var(--accent-color)' : 'var(--danger-color)'
-                                        }}>
-                                            {u.status.toUpperCase()}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                        <select
-                                            value={u.status}
-                                            onChange={(e) => handleUserStatusChange(u._id, e.target.value)}
-                                            disabled={u._id === user._id || (user.role === 'moderator' && u.role === 'admin')}
-                                            style={{
-                                                backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)',
-                                                border: '1px solid var(--border-color)', padding: '5px', borderRadius: '4px'
-                                            }}
-                                        >
-                                            <option value="active">Active</option>
-                                            <option value="warned">Warned</option>
-                                            <option value="temp_banned">Temp Banned</option>
-                                            <option value="perm_banned">Perm Banned</option>
-                                        </select>
-                                        
-                                        <button 
-                                            onClick={() => handleDeleteUser(u._id)}
-                                            disabled={u._id === user._id || (user.role === 'moderator' && u.role === 'admin')}
-                                            className="btn-danger" 
-                                            style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                            title="Delete User"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-surface-hover)', borderBottom: '1px solid var(--border-color)' }}>
+                        <th style={thStyle}>Type</th>
+                        <th style={thStyle}>Reported By</th>
+                        <th style={thStyle}>Reason</th>
+                        <th style={thStyle}>Content Preview</th>
+                        <th style={thStyle}>Author</th>
+                        <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reports.map(report => {
+                        const targetAuthor = report.targetId?.author;
+                        const isBanned = targetAuthor && (targetAuthor.status === 'temp_banned' || targetAuthor.status === 'perm_banned');
+                        return (
+                          <tr key={report._id} style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: isBanned ? 'rgba(226,54,54,0.03)' : 'transparent' }}>
+                            <td style={tdStyle}>
+                              <span style={badgeStyle('var(--accent-color)', '#fff')}>{report.type.toUpperCase()}</span>
+                            </td>
+                            <td style={tdStyle}>
+                              <Link to={`/profile/${report.reporter?.username}`} style={{ fontWeight: 500 }}>
+                                {report.reporter?.username || 'Unknown'}
+                              </Link>
+                            </td>
+                            <td style={{ ...tdStyle, maxWidth: '180px' }}>
+                              <span style={{ fontSize: '0.9rem' }}>{report.reason}</span>
+                            </td>
+                            <td style={{ ...tdStyle, maxWidth: '200px' }}>
+                              <span style={{
+                                fontSize: '0.85rem', fontStyle: 'italic', color: 'var(--text-muted)',
+                                display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                              }}>
+                                "{report.targetId?.content?.substring(0, 80) || '[Deleted]'}{report.targetId?.content?.length > 80 ? '…' : ''}"
+                              </span>
+                            </td>
+                            <td style={tdStyle}>
+                              {targetAuthor && (
+                                <>
+                                  <Link to={`/profile/${targetAuthor.username}`} style={{ fontWeight: 500 }}>
+                                    {targetAuthor.username}
+                                  </Link>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    {report.targetId?.isHidden ? <EyeOff size={11} /> : <Eye size={11} />}
+                                    Warnings: <span style={{ color: report.targetId?.author?.warningCount > 0 ? 'var(--danger-color)' : 'inherit', fontWeight: 'bold' }}>{targetAuthor.warningCount || 0}</span>
+                                  </div>
+                                </>
+                              )}
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: 'center' }}>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                {Object.entries(REPORT_ACTIONS).map(([action, cfg]) => {
+                                  const ActionIcon = cfg.icon;
+                                  const isDisabled = actionLoading === `${report._id}-${action}` || (action === 'ban' && !isAdminView);
+                                  return (
+                                    <button
+                                      key={action}
+                                      onClick={() => handleReportAction(report._id, action)}
+                                      disabled={isDisabled}
+                                      title={action === 'ban' && !isAdminView ? 'Admin only' : cfg.label}
+                                      style={{
+                                        padding: '6px 12px', borderRadius: '6px', border: 'none',
+                                        cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex',
+                                        alignItems: 'center', gap: '4px', fontSize: '0.78rem', fontWeight: 600,
+                                        opacity: isDisabled ? 0.5 : 1, transition: 'all 0.15s', ...cfg.style
+                                      }}
+                                    >
+                                      <ActionIcon size={12} /> {cfg.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-            )}
+              )}
+            </div>
+          )}
 
-            {/* DB Flush Floating Button - Admin Only */}
-            {user?.role === 'admin' && (
-                <button
+          {/* --- User Management --- */}
+          {activeTab === 'users' && (
+            <div>
+              {/* Search */}
+              <div style={{ marginBottom: '15px', position: 'relative', maxWidth: '350px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  placeholder="Search users…"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  style={{ paddingLeft: '40px' }}
+                />
+              </div>
+
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--bg-surface-hover)', borderBottom: '1px solid var(--border-color)' }}>
+                      <th style={thStyle}>User</th>
+                      <th style={thStyle}>Role</th>
+                      <th style={thStyle}>Warnings</th>
+                      <th style={thStyle}>Status</th>
+                      {isAdminView && <th style={thStyle}>Change Role</th>}
+                      <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                          <Users size={32} style={{ marginBottom: '10px', opacity: 0.4 }} />
+                          <p>No users found.</p>
+                        </td>
+                      </tr>
+                    ) : filteredUsers.map(u => {
+                      const statusCfg = STATUS_COLORS[u.status] || STATUS_COLORS.active;
+                      const isSelf = u._id === user._id;
+                      const canModerate = !isSelf && !(user.role === 'moderator' && u.role === 'admin');
+                      const roleOptions = [
+                        { value: 'user', label: 'User' },
+                        { value: 'moderator', label: 'Moderator' },
+                        ...(isAdminView ? [{ value: 'admin', label: 'Admin' }] : []),
+                      ];
+                      return (
+                        <tr key={u._id} style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: isSelf ? 'rgba(246,81,42,0.03)' : 'transparent' }}>
+                          <td style={tdStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div style={{
+                                width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold',
+                                fontSize: '0.9rem', flexShrink: 0
+                              }}>
+                                {u.username.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <Link to={`/profile/${u.username}`} style={{ fontWeight: 500 }}>{u.username}</Link>
+                                {isSelf && <span style={{ fontSize: '0.72rem', color: 'var(--accent-color)', marginLeft: '6px', fontWeight: 'bold' }}>(YOU)</span>}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={badgeStyle(
+                              u.role === 'admin' ? 'var(--danger-color)' : u.role === 'moderator' ? 'var(--accent-color)' : 'var(--text-muted)',
+                              '#fff'
+                            )}>
+                              {u.role.toUpperCase()}
+                            </span>
+                          </td>
+                          <td style={{ ...tdStyle, color: u.warningCount > 0 ? 'var(--danger-color)' : 'inherit', fontWeight: u.warningCount > 0 ? 'bold' : 'normal' }}>
+                            {u.warningCount || 0}
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={badgeStyle(statusCfg.bg, statusCfg.color)}>
+                              {u.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          {isAdminView && (
+                            <td style={tdStyle}>
+                              {u.role !== 'admin' || isAdminView ? (
+                                <select
+                                  value={u.role}
+                                  onChange={e => handleUserRoleChange(u._id, e.target.value)}
+                                  disabled={isSelf}
+                                  style={selectStyle}
+                                >
+                                  {roleOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>—</span>
+                              )}
+                            </td>
+                          )}
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                              <select
+                                value={u.status}
+                                onChange={e => handleUserStatusChange(u._id, e.target.value)}
+                                disabled={!canModerate}
+                                style={{ ...selectStyle, minWidth: '120px' }}
+                              >
+                                <option value="active">Active</option>
+                                <option value="warned">Warned</option>
+                                <option value="temp_banned">Temp Ban</option>
+                                <option value="perm_banned">Perm Ban</option>
+                              </select>
+                              {isAdminView && (
+                                <button
+                                  onClick={() => handleDeleteUser(u._id)}
+                                  disabled={isSelf}
+                                  title={isSelf ? 'Cannot delete yourself' : 'Delete User'}
+                                  style={{
+                                    padding: '6px', borderRadius: '6px', border: '1px solid var(--danger-color)',
+                                    backgroundColor: 'transparent', color: 'var(--danger-color)', cursor: isSelf ? 'not-allowed' : 'pointer',
+                                    display: 'flex', alignItems: 'center', opacity: isSelf ? 0.4 : 1
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* --- Moderation Filters --- */}
+          {activeTab === 'filters' && (
+            <div>
+              <div className="card" style={{ marginBottom: '20px' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', fontSize: '1.2rem' }}>
+                  <Filter size={18} color="var(--accent-color)" /> Auto-Moderation Settings
+                </h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                  {/* Auto-hide threshold */}
+                  <div>
+                    <label style={labelStyle}>Auto-Hide Report Threshold</label>
+                    <p style={descStyle}>Content is automatically hidden after this many reports.</p>
+                    <input
+                      type="number" min="1" max="20" value={filters.autoHideThreshold}
+                      onChange={e => setFilters(prev => ({ ...prev, autoHideThreshold: parseInt(e.target.value) || 1 }))}
+                    />
+                  </div>
+
+                  {/* Auto-warn count */}
+                  <div>
+                    <label style={labelStyle}>Auto-Warn Report Count</label>
+                    <p style={descStyle}>Users receive an automatic warning after this many reports.</p>
+                    <input
+                      type="number" min="1" max="20" value={filters.autoWarnOnReportCount}
+                      onChange={e => setFilters(prev => ({ ...prev, autoWarnOnReportCount: parseInt(e.target.value) || 1 }))}
+                    />
+                  </div>
+
+                  {/* Keyword filter toggle */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '12px' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Keyword Filter</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Auto-hide posts containing banned keywords</div>
+                    </div>
+                    <button
+                      onClick={() => setFilters(prev => ({ ...prev, keywordFilterEnabled: !prev.keywordFilterEnabled }))}
+                      style={{
+                        width: '48px', height: '26px', borderRadius: '50px', border: 'none', cursor: 'pointer',
+                        backgroundColor: filters.keywordFilterEnabled ? 'var(--success-color)' : 'var(--border-color)',
+                        position: 'relative', transition: 'background-color 0.2s'
+                      }}
+                    >
+                      <span style={{
+                        position: 'absolute', top: '3px', left: filters.keywordFilterEnabled ? '25px' : '3px',
+                        width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff',
+                        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                      }} />
+                    </button>
+                  </div>
+
+                  {/* Hide new user reports */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '12px' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Hide New User Reports</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Require manual review for reports on users &lt; 7 days old</div>
+                    </div>
+                    <button
+                      onClick={() => setFilters(prev => ({ ...prev, hideNewUserReports: !prev.hideNewUserReports }))}
+                      style={{
+                        width: '48px', height: '26px', borderRadius: '50px', border: 'none', cursor: 'pointer',
+                        backgroundColor: filters.hideNewUserReports ? 'var(--success-color)' : 'var(--border-color)',
+                        position: 'relative', transition: 'background-color 0.2s'
+                      }}
+                    >
+                      <span style={{
+                        position: 'absolute', top: '3px', left: filters.hideNewUserReports ? '25px' : '3px',
+                        width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff',
+                        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                      }} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Banned Keywords */}
+              <div className="card" style={{ marginBottom: '20px' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px', fontSize: '1.2rem' }}>
+                  <Ban size={18} color="var(--danger-color)" /> Banned Keywords
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                  Posts containing these keywords will be automatically hidden and flagged for review.
+                </p>
+
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                  <input
+                    type="text" placeholder="Add a keyword…" value={newKeyword}
+                    onChange={e => setNewKeyword(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
+                  />
+                  <button onClick={handleAddKeyword} className="btn-primary">Add Keyword</button>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {filters.bannedKeywords.length === 0 ? (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No keywords configured.</span>
+                  ) : filters.bannedKeywords.map(kw => (
+                    <span key={kw} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      padding: '6px 14px', borderRadius: '50px', fontSize: '0.85rem',
+                      backgroundColor: 'rgba(226,54,54,0.1)', color: 'var(--danger-color)', fontWeight: 500
+                    }}>
+                      {kw}
+                      <button onClick={() => handleRemoveKeyword(kw)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, display: 'flex' }}>
+                        <XCircle size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={handleSaveFilters} className="btn-primary" style={{ width: '100%', padding: '14px' }}>
+                Save Filter Configuration
+              </button>
+            </div>
+          )}
+
+          {/* --- DB Maintenance --- */}
+          {activeTab === 'maintenance' && (
+            <div>
+              <div className="card" style={{ marginBottom: '20px' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', fontSize: '1.2rem' }}>
+                  <Database size={18} color="var(--text-secondary)" /> Database Overview
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                  {[
+                    { label: 'Total Users', value: users.length },
+                    { label: 'Pending Reports', value: reports.length },
+                    { label: 'Auto-Hidden Content', value: autoHiddenCount },
+                    { label: 'Active Bans', value: bannedCount },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ padding: '15px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '12px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 'bold' }}>{stat.value}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card" style={{ marginBottom: '20px', borderLeft: '4px solid var(--danger-color)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '1.2rem' }}>
+                  <AlertTriangle size={18} color="var(--danger-color)" /> Flush Database
+                </h3>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                  Permanently delete hidden posts and comments, read notifications, and reviewed/dismissed reports.
+                  This action <strong>cannot be undone</strong>.
+                </p>
+
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <button
                     onClick={handleFlushDb}
                     style={{
-                        position: 'fixed',
-                        bottom: '30px',
-                        right: '30px',
-                        backgroundColor: 'var(--success-color)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '50px',
-                        padding: '12px 24px',
-                        fontWeight: 'bold',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 12px rgba(56, 142, 93, 0.4)',
-                        transition: 'transform 0.2s ease, background-color 0.2s ease',
-                        zIndex: 1000
+                      padding: '12px 28px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                      backgroundColor: 'var(--danger-color)', color: '#fff', fontWeight: 'bold',
+                      display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem',
+                      transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(226,54,54,0.3)'
                     }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                        e.currentTarget.style.backgroundColor = 'var(--accent-color)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                        e.currentTarget.style.backgroundColor = 'var(--success-color)';
-                    }}
-                >
-                    <Trash2 size={20} /> DB FLUSH
-                </button>
-            )}
-        </div>
-    );
+                  >
+                    <Trash2 size={16} /> Flush Database
+                  </button>
+                </div>
+              </div>
+
+              <div className="card" style={{ borderLeft: '4px solid var(--accent-color)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '1.2rem' }}>
+                  <SlidersHorizontal size={18} color="var(--accent-color)" /> Danger Zone
+                </h3>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                  Additional maintenance operations for database cleanup.
+                </p>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <button className="btn-secondary" onClick={() => showAlert('Recalculating user reputation scores… (demo)')}>
+                    Recalculate Reputation
+                  </button>
+                  <button className="btn-secondary" onClick={() => showAlert('Orphaned content scan complete. 0 items found. (demo)')}>
+                    Scan Orphaned Content
+                  </button>
+                  <button className="btn-secondary" onClick={() => showAlert('Export queued. Download link will be sent via email. (demo)')}>
+                    Export Database
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 };
+
+// ---- Shared style helpers ----
+const thStyle = { padding: '14px 16px', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)' };
+const tdStyle = { padding: '14px 16px', fontSize: '0.9rem', verticalAlign: 'middle' };
+const selectStyle = { backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', padding: '6px 10px', borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer' };
+const labelStyle = { display: 'block', fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' };
+const descStyle = { fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '10px' };
+
+const badgeStyle = (bg, color) => ({
+  display: 'inline-block', padding: '3px 10px', borderRadius: '50px',
+  fontSize: '0.72rem', fontWeight: 'bold', letterSpacing: '0.02em',
+  backgroundColor: bg, color
+});
 
 export default AdminDashboard;
