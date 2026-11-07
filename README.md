@@ -57,6 +57,26 @@ npm run dev
 
 The frontend will be accessible at `http://localhost:5173` and the backend API at `http://localhost:5000`.
 
+
+## 🔑 Demo Credentials
+
+All seeded accounts use the password `password123`:
+
+| Email | Role |
+|---|---|
+| `admin@test.com` | admin |
+| `mod@test.com` | moderator |
+| `user@test.com` | user |
+
+To (re)create these accounts at any time:
+
+```bash
+cd backend
+npm run seed
+```
+
+The seed script is idempotent — it creates missing accounts and resets the password of existing ones to `password123`.
+
 ## 📦 Deployment Guide
 
 ### Backend – Render

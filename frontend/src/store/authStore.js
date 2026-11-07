@@ -2,10 +2,17 @@ import { create } from 'zustand';
 import api from '../services/api';
 
 // Get user from localStorage if it exists
-const user = JSON.parse(localStorage.getItem('user'));
+let storedUser = null;
+try {
+    const raw = localStorage.getItem('user');
+    storedUser = raw ? JSON.parse(raw) : null;
+} catch {
+    localStorage.removeItem('user');
+    storedUser = null;
+}
 
 const useAuthStore = create((set) => ({
-    user: user || null,
+    user: storedUser || null,
     isLoading: false,
     error: null,
 
@@ -18,7 +25,7 @@ const useAuthStore = create((set) => ({
             set({ user: response.data, isLoading: false });
         } catch (error) {
             set({
-                error: error.response?.data?.message || 'Registration failed',
+                error: error.response?.data?.message || error.message || 'Registration failed',
                 isLoading: false
             });
             throw error;
@@ -33,7 +40,7 @@ const useAuthStore = create((set) => ({
             set({ user: response.data, isLoading: false });
         } catch (error) {
             set({
-                error: error.response?.data?.message || 'Login failed',
+                error: error.response?.data?.message || error.message || 'Login failed',
                 isLoading: false
             });
             throw error;

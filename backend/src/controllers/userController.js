@@ -7,7 +7,8 @@ const generateAnonymousUsername = require('../utils/generateUsername');
 // @access  Public
 const registerUser = async (req, res, next) => {
     try {
-        const { email, password, age } = req.body;
+        const email = (req.body.email || '').toLowerCase().trim();
+        const { password, age } = req.body;
 
         if (!email || !password || !age) {
             res.status(400);
@@ -59,7 +60,8 @@ const registerUser = async (req, res, next) => {
 // @access  Public
 const loginUser = async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const email = (req.body.email || '').toLowerCase().trim();
+        const { password } = req.body;
 
         // Check for user email (include password for comparison)
         const user = await User.findOne({ email }).select('+password');

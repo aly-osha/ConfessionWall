@@ -7,6 +7,8 @@ const UserSchema = new mongoose.Schema(
             type: String,
             required: [true, 'Please add an email'],
             unique: true,
+            lowercase: true,
+            trim: true,
             select: false, // email is private
             match: [
                 /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
